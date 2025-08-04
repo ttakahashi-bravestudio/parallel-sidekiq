@@ -98,6 +98,7 @@ GEM
     crass (1.0.6)
     cssbundling-rails (1.4.3)
       railties (>= 6.0.0)
+    csv (3.3.5)
     date (3.4.1)
     debug (1.11.0)
       irb (~> 1.10)
@@ -327,6 +328,7 @@ DEPENDENCIES
   brakeman
   capybara
   cssbundling-rails
+  csv
   debug
   jbuilder
   jsbundling-rails
@@ -335,6 +337,7 @@ DEPENDENCIES
   rails (~> 8.0.2)
   redis (>= 4.0.1)
   rubocop-rails-omakase
+  securerandom
   selenium-webdriver
   sidekiq
   sqlite3 (>= 2.1)
