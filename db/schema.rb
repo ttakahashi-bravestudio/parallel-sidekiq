@@ -10,7 +10,19 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_08_04_064544) do
+ActiveRecord::Schema[8.0].define(version: 2025_08_04_105122) do
+  create_table "client_reports", force: :cascade do |t|
+    t.string "security_hash"
+    t.datetime "deleted_at"
+    t.integer "report_type", default: 0, null: false
+    t.integer "count", default: 0, null: false
+    t.string "file"
+    t.integer "status", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.string "token"
+  end
+
   create_table "csv_processing_statuses", force: :cascade do |t|
     t.string "token", null: false
     t.integer "total_count", default: 0, null: false
