@@ -12,7 +12,7 @@ services:
       CDK_DEFAULT_ACCOUNT: "633652790644"
       GITHUB_REPO_OWNER: "ttakahashi-bravestudio"
       GITHUB_REPO_NAME: "parallel-sidekiq"
-      ECS_CPU: "21"
+      ECS_CPU: 256"
       ECS_MEMORY: "1024"
       ECS_DESIRED_COUNT: "0"
       CDK_DISABLE_CLI_TELEMETRY: "1"

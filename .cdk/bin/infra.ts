@@ -23,7 +23,7 @@ if (!githubRepoName) {
 }
 
 // スタックの作成
-new InfraStack(app, `dajp-${environment}-InfraStack`, {
+new InfraStack(app, `parapp-${environment}-InfraStack`, {
   environment,
   githubConnectionArn,
   githubRepoName,
