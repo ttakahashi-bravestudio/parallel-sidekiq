@@ -2,19 +2,14 @@ import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
-import * as rds from 'aws-cdk-lib/aws-rds';
-import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as codebuild from 'aws-cdk-lib/aws-codebuild';
 import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
 import * as codepipeline_actions from 'aws-cdk-lib/aws-codepipeline-actions';
 import * as codedeploy from 'aws-cdk-lib/aws-codedeploy';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as kms from 'aws-cdk-lib/aws-kms';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as elasticache from 'aws-cdk-lib/aws-elasticache';
-import { RemovalPolicy } from 'aws-cdk-lib';
-import { Bucket, BlockPublicAccess, BucketEncryption } from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 import * as resourcegroups from 'aws-cdk-lib/aws-resourcegroups';
 import * as appinsights from 'aws-cdk-lib/aws-applicationinsights';
@@ -41,61 +36,9 @@ export class InfraStack extends cdk.Stack {
 
     // リソース名生成用のメソッド
     const generateResourceName = (name: string): string => {
-      return `dajp-${props.environment.substring(0, 3)}-${name}`.toLowerCase();
+      return `parapp-${props.environment.substring(0, 3)}-${name}`.toLowerCase();
     };
 
-    // KMSキーの作成
-    const encryptionKey = new kms.Key(this, 'EncryptionKey', {
-      enableKeyRotation: true,
-      description: `Encryption key for dajp ${props.environment} environment`,
-      alias: generateResourceName('encryption-key'),
-      // CloudWatch LogsがこのKMSキーを使用できるようにポリシーを追加
-      policy: new iam.PolicyDocument({
-        statements: [
-          new iam.PolicyStatement({
-            sid: 'Enable IAM User Permissions',
-            effect: iam.Effect.ALLOW,
-            principals: [new iam.AccountRootPrincipal()],
-            actions: ['kms:*'],
-            resources: ['*'],
-          }),
-          new iam.PolicyStatement({
-            sid: 'Allow CloudWatch Logs to use the key',
-            effect: iam.Effect.ALLOW,
-            principals: [new iam.ServicePrincipal(`logs.${this.region}.amazonaws.com`)],
-            actions: [
-              'kms:Encrypt*',
-              'kms:Decrypt*',
-              'kms:ReEncrypt*',
-              'kms:GenerateDataKey*',
-              'kms:Describe*',
-            ],
-            resources: ['*'],
-            conditions: {
-              ArnLike: {
-                'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${this.region}:${this.account}:*`,
-              },
-            },
-          }),
-        ],
-      }),
-    });
-
-    // CloudWatch LogsがKMSキーを使用できるようにする追加の許可
-    encryptionKey.addToResourcePolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        principals: [new iam.ServicePrincipal('logs.amazonaws.com')],
-        actions: [
-          'kms:Encrypt*',
-          'kms:Decrypt*',
-          'kms:ReEncrypt*',
-          'kms:GenerateDataKey*',
-          'kms:Describe*',
-        ],
-        resources: ['*'],
-      })
-    );
 
     // NATインスタンスの作成
     const natInstance = ec2.NatProvider.instanceV2({
@@ -164,33 +107,23 @@ export class InfraStack extends cdk.Stack {
       allowAllOutbound: true,
     });
 
-    const rdsSecurityGroup = new ec2.SecurityGroup(this, 'RdsSecurityGroup', {
+    // Valkeyのセキュリティグループ
+    let redisSecurityGroup = new ec2.SecurityGroup(this, 'ValkeySecurityGroup', {
       vpc,
-      securityGroupName: generateResourceName('rds-sg'),
-      description: 'Security group for RDS',
+      securityGroupName: generateResourceName('valkey-sg'),
+      description: 'Security group for Valkey ElastiCache',
       allowAllOutbound: false,
     });
-
-    // Valkeyのセキュリティグループ（本番環境のみ）
-    let redisSecurityGroup;
-    if (props.environment === 'production') {
-      redisSecurityGroup = new ec2.SecurityGroup(this, 'ValkeySecurityGroup', {
-        vpc,
-        securityGroupName: generateResourceName('valkey-sg'),
-        description: 'Security group for Valkey ElastiCache',
-        allowAllOutbound: false,
-      });
-    }
 
     // セキュリティグループのルール設定
     albSecurityGroup.addIngressRule(
       ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(443),
+      ec2.Port.tcp(80),
       'Allow HTTPS traffic'
     );
     albSecurityGroup.addIngressRule(
       ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(8443),
+      ec2.Port.tcp(8080),
       'Allow HTTPS traffic for blue-green'
     );
 
@@ -200,49 +133,40 @@ export class InfraStack extends cdk.Stack {
       'Allow traffic from ALB'
     );
 
-    rdsSecurityGroup.addIngressRule(
-      ecsSecurityGroup,
-      ec2.Port.tcp(3306),
-      'Allow MySQL traffic from ECS'
-    );
+    // Valkey ElastiCacheの作成
+    // サブネットグループの作成
+    const redisSubnetGroup = new elasticache.CfnSubnetGroup(this, 'ValkeySubnetGroup', {
+      description: 'Subnet group for Valkey ElastiCache',
+      subnetIds: vpc.privateSubnets.map(subnet => subnet.subnetId),
+      cacheSubnetGroupName: generateResourceName('valkey-subnet-group'),
+    });
 
-    // Valkey ElastiCacheの作成（本番環境のみ）
-    let redis;
-    if (props.environment === 'production' && redisSecurityGroup) {
-      // サブネットグループの作成
-      const redisSubnetGroup = new elasticache.CfnSubnetGroup(this, 'ValkeySubnetGroup', {
-        description: 'Subnet group for Valkey ElastiCache',
-        subnetIds: vpc.privateSubnets.map(subnet => subnet.subnetId),
-        cacheSubnetGroupName: generateResourceName('valkey-subnet-group'),
-      });
+    // Valkeyクラスターの作成
+    const valkey_description = 'ValkeyElastiCache';
+    let redis = new elasticache.CfnReplicationGroup(this, "ReplicationGroup", {
+      replicationGroupDescription: valkey_description,
+      engine: "valkey", // engine は valkey を指定
+      engineVersion: "7.2",
+      cacheNodeType: "cache.t3.micro",
+      cacheSubnetGroupName: redisSubnetGroup.ref,
+      cacheParameterGroupName: new elasticache.CfnParameterGroup(this, "ParameterGroup", {
+        description: valkey_description,
+        cacheParameterGroupFamily: "valkey7" // パラメータグループは valkey7 を指定
+      }).ref,
+      numNodeGroups: 1,
+      replicasPerNodeGroup: 1,
+      securityGroupIds: [redisSecurityGroup.securityGroupId],
+      atRestEncryptionEnabled: true,
+      transitEncryptionEnabled: true,
+    });
 
-      // Valkeyクラスターの作成
-      const valkey_description = 'ValkeyElastiCache';
-      redis = new elasticache.CfnReplicationGroup(this, "ReplicationGroup", {
-        replicationGroupDescription: valkey_description,
-        engine: "valkey", // engine は valkey を指定
-        engineVersion: "7.2",
-        cacheNodeType: "cache.t3.micro",
-        cacheSubnetGroupName: redisSubnetGroup.ref,
-        cacheParameterGroupName: new elasticache.CfnParameterGroup(this, "ParameterGroup", {
-          description: valkey_description,
-          cacheParameterGroupFamily: "valkey7" // パラメータグループは valkey7 を指定
-        }).ref,
-        numNodeGroups: 1,
-        replicasPerNodeGroup: 1,
-        securityGroupIds: [redisSecurityGroup.securityGroupId],
-        atRestEncryptionEnabled: true,
-        transitEncryptionEnabled: true,
-      });
-
-      // Valkeyセキュリティグループのルール設定（本番環境のみ）
-      if (redisSecurityGroup) {
-        redisSecurityGroup.addIngressRule(
-          ecsSecurityGroup,
-          ec2.Port.tcp(Number(redis.attrPrimaryEndPointPort) || 6379),
-          'Allow Valkey traffic from ECS'
-        );
-      }
+    // Valkeyセキュリティグループのルール設定（本番環境のみ）
+    if (redisSecurityGroup) {
+      redisSecurityGroup.addIngressRule(
+        ecsSecurityGroup,
+        ec2.Port.tcp(Number(redis.attrPrimaryEndPointPort) || 6379),
+        'Allow Valkey traffic from ECS'
+      );
     }
 
     // ECRリポジトリの作成
@@ -317,20 +241,8 @@ export class InfraStack extends cdk.Stack {
       })
     );
 
-    // X-Ray用のポリシーを追加
-    taskRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          'xray:PutTraceSegments',
-          'xray:PutTelemetryRecords',
-          'xray:GetSamplingRules',
-          'xray:GetSamplingTargets'
-        ],
-        resources: ['*']
-      })
-    );
 
+    
     // S3バケットへのアクセス権限を追加
     if (props.s3BucketArn) {
       taskRole.addToPolicy(
@@ -345,39 +257,7 @@ export class InfraStack extends cdk.Stack {
     const logGroup = new logs.LogGroup(this, 'LogGroup', {
       logGroupName: `/ecs/${generateResourceName('app')}`,
       retention: props.environment === 'staging' ? logs.RetentionDays.ONE_MONTH : logs.RetentionDays.ONE_YEAR,
-      encryptionKey,
     });
-
-    // RDSインスタンスの作成
-    const database = new rds.DatabaseInstance(this, 'Database', {
-      engine: rds.DatabaseInstanceEngine.mysql({
-        version: rds.MysqlEngineVersion.VER_8_4_5,
-      }),
-      vpc,
-      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
-      instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.T4G,
-        props.environment === 'production' ? ec2.InstanceSize.SMALL : ec2.InstanceSize.MICRO
-      ),
-      credentials: rds.Credentials.fromGeneratedSecret('dbadmin'),
-      allocatedStorage: 20,
-      maxAllocatedStorage: 100,
-      storageEncrypted: true,
-      storageEncryptionKey: encryptionKey,
-      securityGroups: [rdsSecurityGroup],
-      backupRetention: cdk.Duration.days(7),
-      preferredBackupWindow: '03:00-04:00',
-      preferredMaintenanceWindow: 'Mon:04:00-Mon:05:00',
-      multiAz: props.environment === 'production', // 本番環境でのみマルチAZを有効化
-      autoMinorVersionUpgrade: true,
-      removalPolicy: cdk.RemovalPolicy.SNAPSHOT,
-      databaseName: `${generateResourceName('db').replace(/[^a-zA-Z0-9]/g, '')}`, // データベース名から無効な文字を削除
-      instanceIdentifier: generateResourceName('db'),
-      monitoringInterval: cdk.Duration.minutes(1),
-      enablePerformanceInsights: false,
-      deleteAutomatedBackups: props.environment !== 'production', // 本番環境以外は自動バックアップを削除
-    });
-
 
     // Appタスク定義の作成
     const taskDefinition = new ecs.FargateTaskDefinition(this, 'TaskDefinition', {
@@ -401,82 +281,36 @@ export class InfraStack extends cdk.Stack {
       portMappings: [{ containerPort: 80 }],
       environment: {
         ENVIRONMENT: props.environment,
-        CONTACT_RECIPIENT_EMAIL: props.contactRecipientEmail || '',
-        BCC_ADDRESS: props.bccAddress || '',
-        TOKEN_API_KEY: props.tokenApiKey || '',
-        SENTRY_DSN: props.sentryDsn || '',
-        // X-Ray設定（本番環境のみ）
-        ...(props.environment === 'production' ? {
-          _X_AMZN_TRACE_ID: '',
-          AWS_XRAY_TRACING_NAME: 'dajp-app',
-          AWS_XRAY_DAEMON_ADDRESS: 'localhost:2000',
-          // Valkey設定（本番環境のみ）
-          REDIS_HOST: redis ? redis.attrPrimaryEndPointAddress : '',
-          REDIS_PORT: redis ? redis.attrPrimaryEndPointPort : '',
-          REDIS_URL: redis ? `redis://${redis.attrPrimaryEndPointAddress}:${redis.attrPrimaryEndPointPort}` : ''
-        } : {})
-      },
-      secrets: {
-        DB_HOST: ecs.Secret.fromSecretsManager(database.secret!, 'host'),
-        DB_PORT: ecs.Secret.fromSecretsManager(database.secret!, 'port'),
-        DB_NAME: ecs.Secret.fromSecretsManager(database.secret!, 'dbname'),
-        DB_USER: ecs.Secret.fromSecretsManager(database.secret!, 'username'),
-        DB_PASSWORD: ecs.Secret.fromSecretsManager(database.secret!, 'password'),
+        REDIS_HOST: redis ? redis.attrPrimaryEndPointAddress : '',
+        REDIS_PORT: redis ? redis.attrPrimaryEndPointPort : '',
+        REDIS_URL: redis ? `redis://${redis.attrPrimaryEndPointAddress}:${redis.attrPrimaryEndPointPort}` : ''
       },
     });
 
-    // X-Rayサイドカーコンテナの追加（本番環境のみ）
-    if (props.environment === 'production') {
-      const xrayContainer = taskDefinition.addContainer('XRayContainer', {
-        image: ecs.ContainerImage.fromRegistry('public.ecr.aws/xray/aws-xray-daemon:latest'),
-        memoryLimitMiB: 32,
-        cpu: 32,
-        essential: false,
-        logging: ecs.LogDrivers.awsLogs({
-          streamPrefix: 'xray',
-          logGroup,
-        }),
-        portMappings: [
-          { containerPort: 2000, protocol: ecs.Protocol.UDP },
-          { containerPort: 2000, protocol: ecs.Protocol.TCP }
-        ],
-        environment: {
-          AWS_REGION: this.region
-        },
-        command: ['-o']
-      });
-    }
-
-    // Cronタスク定義の作成
-    const cronTaskDefinition = new ecs.FargateTaskDefinition(this, 'CronTaskDefinition', {
+    // sidekiqタスク定義の作成
+    const sidekiqTaskDefinition = new ecs.FargateTaskDefinition(this, 'sidekiqTaskDefinition', {
       memoryLimitMiB: 512,
       cpu: 256,
       taskRole,
       executionRole: taskExecutionRole,
-      family: generateResourceName('cron'),
+      family: generateResourceName('sidekiq'),
       runtimePlatform: {
         cpuArchitecture: ecs.CpuArchitecture.ARM64,
         operatingSystemFamily: ecs.OperatingSystemFamily.LINUX,
       },
     });
-    // Cronコンテナの定義
-    const cronContainer = cronTaskDefinition.addContainer('CronContainer', {
+    // sidekiqコンテナの定義
+    const sidekiqContainer = sidekiqTaskDefinition.addContainer('sidekiqContainer', {
       image: ecs.ContainerImage.fromRegistry('amazon/amazon-ecs-sample'),
       logging: ecs.LogDrivers.awsLogs({
-        streamPrefix: 'ecs-cron',
+        streamPrefix: 'ecs-sidekiq',
         logGroup,
       }),
       environment: {
         ENVIRONMENT: props.environment,
-        BCC_ADDRESS: props.bccAddress || '',
-        SENTRY_DSN: props.sentryDsn || '',
-      },
-      secrets: {
-        DB_HOST: ecs.Secret.fromSecretsManager(database.secret!, 'host'),
-        DB_PORT: ecs.Secret.fromSecretsManager(database.secret!, 'port'),
-        DB_NAME: ecs.Secret.fromSecretsManager(database.secret!, 'dbname'),
-        DB_USER: ecs.Secret.fromSecretsManager(database.secret!, 'username'),
-        DB_PASSWORD: ecs.Secret.fromSecretsManager(database.secret!, 'password'),
+        REDIS_HOST: redis ? redis.attrPrimaryEndPointAddress : '',
+        REDIS_PORT: redis ? redis.attrPrimaryEndPointPort : '',
+        REDIS_URL: redis ? `redis://${redis.attrPrimaryEndPointAddress}:${redis.attrPrimaryEndPointPort}` : ''
       },
     });
 
@@ -524,12 +358,8 @@ export class InfraStack extends cdk.Stack {
 
     // HTTPSリスナーの作成
     const httpsListener = loadBalancer.addListener('HttpsListener', {
-      port: 443,
+      port: 80,
       open: true,
-      certificates: [
-        elbv2.ListenerCertificate.fromArn(props.certificateArn)
-      ],
-      sslPolicy: elbv2.SslPolicy.RECOMMENDED_TLS,
     });
 
     // 最初はブルーターゲットグループをHTTPSリスナーにアタッチ
@@ -539,32 +369,14 @@ export class InfraStack extends cdk.Stack {
     
     // テスト用のリスナーを作成（グリーン環境のテスト用）
     const testListener = loadBalancer.addListener('TestListener', {
-      port: 8443,
-      protocol: elbv2.ApplicationProtocol.HTTPS,
-      certificates: [
-        elbv2.ListenerCertificate.fromArn(props.certificateArn)
-      ],
-      sslPolicy: elbv2.SslPolicy.RECOMMENDED_TLS,
-      open: false,  // セキュリティのため限定的なアクセスのみ許可
+      port: 8080,
+      protocol: elbv2.ApplicationProtocol.HTTP,
+      open: true,
     });
-
-    testListener.connections.allowFrom(
-      ec2.Peer.ipv4('153.142.38.216/32'),
-      ec2.Port.tcp(8443),
-      'Allow specific IP range'
-    );
     
     // テストリスナーにはグリーンターゲットグループをアタッチ
     testListener.addTargetGroups('TestRoute', {
       targetGroups: [greenTargetGroup],
-    });
-
-    // HTTPからHTTPSへのリダイレクトリスナー
-    loadBalancer.addRedirect({
-      sourceProtocol: elbv2.ApplicationProtocol.HTTP,
-      sourcePort: 80,
-      targetProtocol: elbv2.ApplicationProtocol.HTTPS,
-      targetPort: 443,
     });
 
     // Fargateサービスの作成
@@ -589,9 +401,9 @@ export class InfraStack extends cdk.Stack {
       enableECSManagedTags: true,
       enableExecuteCommand: true, // ECS Execを有効化
     });
-    const cronService = new ecs.FargateService(this, 'CronService', {
+    const sidekiqService = new ecs.FargateService(this, 'SidekiqService', {
       cluster,
-      taskDefinition: cronTaskDefinition,
+      taskDefinition: sidekiqTaskDefinition,
       desiredCount: 0,
       assignPublicIp: false,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
@@ -608,152 +420,8 @@ export class InfraStack extends cdk.Stack {
       enableExecuteCommand: true, // ECS Execを有効化
     });
     
-    
     // 初期デプロイメントのためにブルーターゲットグループに登録
     service.attachToApplicationTargetGroup(blueTargetGroup);
-
-    // オートスケーリングの設定
-    const scaling = service.autoScaleTaskCount({
-      minCapacity: props.desiredCount,
-      maxCapacity: 10,
-    });
-
-    scaling.scaleOnCpuUtilization('CpuScaling', {
-      targetUtilizationPercent: 70,
-      scaleInCooldown: cdk.Duration.seconds(60),
-      scaleOutCooldown: cdk.Duration.seconds(60),
-    });
-
-    scaling.scaleOnMemoryUtilization('MemoryScaling', {
-      targetUtilizationPercent: 70,
-      scaleInCooldown: cdk.Duration.seconds(60),
-      scaleOutCooldown: cdk.Duration.seconds(60),
-    });
-    
-    // データベース接続のセキュリティグループルールを更新
-    database.connections.allowDefaultPortFrom(ecsSecurityGroup, 'Allow ECS to access RDS');
-
-    // バケット名は必ず "aws-waf-logs-" で始める必要があります:contentReference[oaicite:0]{index=0}
-    const wafLogsBucket = new Bucket(this, 'WafLogsBucket', {
-      bucketName: `aws-waf-logs-dajp-${props.environment}`,      // 任意のサフィックスを付与
-      encryption: BucketEncryption.S3_MANAGED,          // SSE-S3 暗号化
-      blockPublicAccess: BlockPublicAccess.BLOCK_ALL,   // パブリックアクセスをブロック
-      removalPolicy: RemovalPolicy.RETAIN,              // ログを保持したいので RETAIN
-    });                       
-
-    // WAF Web ACLの作成
-    const webAcl = new wafv2.CfnWebACL(this, 'WebAcl', {
-      defaultAction: { allow: {} },
-      scope: 'REGIONAL',
-      name: generateResourceName('web-acl'),
-      visibilityConfig: {
-        cloudWatchMetricsEnabled: true,
-        metricName: generateResourceName('web-acl').replace(/[^a-zA-Z0-9]/g, '-'),
-        sampledRequestsEnabled: true,
-      },
-      rules: [
-        {
-          name: 'AWSManagedRulesCommonRuleSet',
-          priority: 1,
-          overrideAction: { none: {} },
-          statement: {
-            managedRuleGroupStatement: {
-              vendorName: 'AWS',
-              name: 'AWSManagedRulesCommonRuleSet',
-              excludedRules: [
-                { name: 'SizeRestrictions_BODY' }
-              ],
-            },
-          },
-          visibilityConfig: {
-            cloudWatchMetricsEnabled: true,
-            metricName: 'AWSManagedRulesCommonRuleSet',
-            sampledRequestsEnabled: true,
-          },
-        },
-        {
-          name: 'AWSManagedRulesKnownBadInputsRuleSet',
-          priority: 2,
-          overrideAction: { none: {} },
-          statement: {
-            managedRuleGroupStatement: {
-              vendorName: 'AWS',
-              name: 'AWSManagedRulesKnownBadInputsRuleSet',
-            },
-          },
-          visibilityConfig: {
-            cloudWatchMetricsEnabled: true,
-            metricName: 'AWSManagedRulesKnownBadInputsRuleSet',
-            sampledRequestsEnabled: true,
-          },
-        },
-        {
-          name: 'RateLimit',
-          priority: 3,
-          action: { block: {} },
-          statement: {
-            rateBasedStatement: {
-              limit: 2000,
-              aggregateKeyType: 'IP',
-            },
-          },
-          visibilityConfig: {
-            cloudWatchMetricsEnabled: true,
-            metricName: 'RateLimit',
-            sampledRequestsEnabled: true,
-          },
-        },
-        // // BOT対策
-        // {
-        //   name: 'AWSManagedRulesBotControlRuleSet',
-        //   priority: 4,
-        //   overrideAction: { none: {} },
-        //   statement: {
-        //     managedRuleGroupStatement: {
-        //       vendorName: 'AWS',
-        //       name: 'AWSManagedRulesBotControlRuleSet',
-        //     },
-        //   },
-        //   visibilityConfig: {
-        //     cloudWatchMetricsEnabled: true,
-        //     metricName: 'AWSManagedRulesBotControlRuleSet',
-        //     sampledRequestsEnabled: true,
-        //   },
-        // },
-        // // 匿名IP対策
-        // {
-        //   name: 'AWSManagedRulesAnonymousIpList',
-        //   priority: 5,
-        //   overrideAction: { none: {} },
-        //   statement: {
-        //     managedRuleGroupStatement: {
-        //       vendorName: 'AWS',
-        //       name: 'AWSManagedRulesAnonymousIpList',
-        //     },
-        //   },
-        //   visibilityConfig: {
-        //     cloudWatchMetricsEnabled: true,
-        //     metricName: 'AWSManagedRulesAnonymousIpList',
-        //     sampledRequestsEnabled: true,
-        //   },
-        // },
-      ],
-    });
-
-    const logConfig = new cdk.aws_wafv2.CfnLoggingConfiguration(
-      this,
-      "wafV2LoggingConfiguration",
-      {
-        logDestinationConfigs: [wafLogsBucket.bucketArn],
-        resourceArn: webAcl.attrArn,
-      }
-    )
-
-    // WAFとALBの関連付け
-    new wafv2.CfnWebACLAssociation(this, 'WebAclAssociation', {
-      resourceArn: loadBalancer.loadBalancerArn,
-      webAclArn: webAcl.attrArn,
-    });
 
     // CodeBuildプロジェクトの作成
     const buildProject = new codebuild.PipelineProject(this, 'BuildProject', {
@@ -782,8 +450,8 @@ export class InfraStack extends cdk.Stack {
           build: {
             commands: [
               'echo Build started on `date`',
-              'echo Building the Docker image using Dockerfile.production...',
-              `docker build -f Dockerfile.${props.environment} -t $ECR_REPOSITORY_URI:$CODEBUILD_RESOLVED_SOURCE_VERSION .`,
+              'echo Building the Docker image using Dockerfile...',
+              `docker build -f Dockerfile -t $ECR_REPOSITORY_URI:$CODEBUILD_RESOLVED_SOURCE_VERSION .`,
               'docker tag $ECR_REPOSITORY_URI:$CODEBUILD_RESOLVED_SOURCE_VERSION $ECR_REPOSITORY_URI:latest'
             ]
           },
@@ -998,7 +666,7 @@ export class InfraStack extends cdk.Stack {
     // Deploy (ECS Rolling Update)
     const cronDeployAction = new codepipeline_actions.EcsDeployAction({
       actionName: 'Deploy',
-      service: cronService,
+      service: sidekiqService,
       imageFile: cronBuildOutput.atPath('imagedefinitions.json'),
     });
 
@@ -1015,7 +683,7 @@ export class InfraStack extends cdk.Stack {
       // リソースグループの作成
     const resourceGroup = new resourcegroups.CfnGroup(this, 'ApplicationResourceGroup', {
       name: generateResourceName('app-resource-group'),
-      description: `Resource group for dajp ${props.environment} environment`,
+      description: `Resource group for parapp ${props.environment} environment`,
       resourceQuery: {
         type: 'TAG_FILTERS_1_0',
         query: {
@@ -1027,7 +695,7 @@ export class InfraStack extends cdk.Stack {
             },
             {
               key: 'Application',
-              values: ['dajp']
+              values: ['parapp']
             }
           ]
         }
@@ -1039,7 +707,7 @@ export class InfraStack extends cdk.Stack {
         },
         {
           key: 'Application',
-          value: 'dajp'
+          value: 'parapp'
         }
       ]
     });
@@ -1057,7 +725,7 @@ export class InfraStack extends cdk.Stack {
         },
         {
           key: 'Application',
-          value: 'dajp'
+          value: 'parapp'
         }
       ]
     });
@@ -1076,15 +744,13 @@ export class InfraStack extends cdk.Stack {
 
       // リソースにタグを追加してApplication Insightsで監視対象として認識させる
       cdk.Tags.of(cluster).add('Environment', props.environment);
-      cdk.Tags.of(cluster).add('Application', 'dajp');
+      cdk.Tags.of(cluster).add('Application', 'parapp');
       cdk.Tags.of(loadBalancer).add('Environment', props.environment);
-      cdk.Tags.of(loadBalancer).add('Application', 'dajp');
-      cdk.Tags.of(database).add('Environment', props.environment);
-      cdk.Tags.of(database).add('Application', 'dajp');
+      cdk.Tags.of(loadBalancer).add('Application', 'parapp');
       cdk.Tags.of(service).add('Environment', props.environment);
-      cdk.Tags.of(service).add('Application', 'dajp');
-      cdk.Tags.of(cronService).add('Environment', props.environment);
-      cdk.Tags.of(cronService).add('Application', 'dajp');
+      cdk.Tags.of(service).add('Application', 'parapp');
+      cdk.Tags.of(sidekiqService).add('Environment', props.environment);
+      cdk.Tags.of(sidekiqService).add('Application', 'parapp');
     }
 
     // 出力
@@ -1094,25 +760,10 @@ export class InfraStack extends cdk.Stack {
       exportName: generateResourceName('loadbalancer-dns'),
     });
 
-    new cdk.CfnOutput(this, 'DatabaseEndpoint', {
-      value: database.dbInstanceEndpointAddress,
-      description: 'Database Endpoint',
-      exportName: generateResourceName('database-endpoint'),
-    });
-
     new cdk.CfnOutput(this, 'PipelineName', {
       value: pipeline.pipelineName,
       description: 'Pipeline Name',
       exportName: generateResourceName('pipeline-name'),
     });
-
-    // Application Insightsの出力（本番環境のみ）
-    if (props.environment === 'production') {
-      new cdk.CfnOutput(this, 'ApplicationInsightsName', {
-        value: generateResourceName('app-resource-group'),
-        description: 'Application Insights Application Name',
-        exportName: generateResourceName('app-insights-name'),
-      });
-    }
   }
 } 
