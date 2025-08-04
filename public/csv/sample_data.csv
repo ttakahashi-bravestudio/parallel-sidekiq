@@ -1,0 +1,11 @@
+id,name,email,phone,address,registration_date,status
+1,田中太郎,tanaka.taro@example.com,090-1234-5678,東京都渋谷区1-1-1,2024-01-15,active
+2,佐藤花子,sato.hanako@example.com,090-2345-6789,大阪府大阪市2-2-2,2024-01-16,active
+3,鈴木一郎,suzuki.ichiro@example.com,090-3456-7890,愛知県名古屋市3-3-3,2024-01-17,inactive
+4,高橋美咲,takahashi.misaki@example.com,090-4567-8901,福岡県福岡市4-4-4,2024-01-18,active
+5,伊藤健太,ito.kenta@example.com,090-5678-9012,北海道札幌市5-5-5,2024-01-19,active
+6,渡辺恵子,watanabe.keiko@example.com,090-6789-0123,宮城県仙台市6-6-6,2024-01-20,inactive
+7,山田次郎,yamada.jiro@example.com,090-7890-1234,広島県広島市7-7-7,2024-01-21,active
+8,中村由美,nakamura.yumi@example.com,090-8901-2345,京都府京都市8-8-8,2024-01-22,active
+9,小林正男,kobayashi.masao@example.com,090-9012-3456,神奈川県横浜市9-9-9,2024-01-23,active
+10,加藤真理,kato.mari@example.com,090-0123-4567,兵庫県神戸市10-10-10,2024-01-24,inactive 

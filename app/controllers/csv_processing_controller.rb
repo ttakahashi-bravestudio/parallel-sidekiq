@@ -9,6 +9,11 @@ class CsvProcessingController < ApplicationController
       csv_type = params[:csv_type] || 'default'
       report_id = SecureRandom.uuid # 実際のアプリケーションでは適切なIDを生成
 
+      client_report = ClientReport.create!(
+        report_type: csv_type,
+        status: :pending
+      )
+
       # SplitCsvJobをエンキュー
       SplitCsvJob.perform_later(csv_content, csv_type, report_id)
 
