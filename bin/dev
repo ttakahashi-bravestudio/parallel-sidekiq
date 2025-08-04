@@ -5,6 +5,10 @@ if gem list --no-installed --exact --silent foreman; then
   gem install foreman
 fi
 
+if [ "$RAILS_ENV" = "development" ]; then
+  docker compose run --rm web yarn install
+fi
+
 # Default to port 3000 if not specified
 export PORT="${PORT:-3000}"
 

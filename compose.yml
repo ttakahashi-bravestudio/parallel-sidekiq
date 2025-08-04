@@ -12,7 +12,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
     depends_on:
       - redis
-    command: rails server -b 0.0.0.0
+    command: bin/dev
     stdin_open: true
     tty: true
 

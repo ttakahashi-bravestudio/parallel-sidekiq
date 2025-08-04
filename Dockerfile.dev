@@ -37,6 +37,8 @@ RUN bundle install
 # アプリケーションのソースコードをコピー
 COPY . .
 
+RUN npm install n -g && n install lts && npm install -g yarn
+
 # アセットのプリコンパイル（本番環境の場合）
 # RUN bundle exec rake assets:precompile
 
