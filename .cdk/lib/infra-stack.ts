@@ -12,8 +12,6 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import * as elasticache from 'aws-cdk-lib/aws-elasticache';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
-import * as resourcegroups from 'aws-cdk-lib/aws-resourcegroups';
-import * as appinsights from 'aws-cdk-lib/aws-applicationinsights';
 
 export interface InfraStackProps extends cdk.StackProps {
   environment: string;
