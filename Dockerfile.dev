@@ -46,4 +46,4 @@ RUN npm install n -g && n install lts && npm install -g yarn
 EXPOSE 3000
 
 # 開発サーバーを起動
-CMD ["rails", "server", "-b", "0.0.0.0"]
+CMD ["bin/rails", "server", "-b", "0.0.0.0"]
