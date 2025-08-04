@@ -13,11 +13,9 @@ Rails.application.routes.draw do
   # get "service-worker" => "rails/pwa#service_worker", as: :pwa_service_worker
 
   # CSV処理関連のルート
-  resources :csv_processing, only: [:new, :create] do
-    collection do
-      get :status
-    end
-  end
+  get 'csv_processing/new', to: 'csv_processing#new', as: :new_csv_processing
+  post 'csv_processing', to: 'csv_processing#create', as: :csv_processing_index
+  get 'csv_processing/status', to: 'csv_processing#status', as: :csv_processing_status
   get 'csv_processing/:token', to: 'csv_processing#show', as: :csv_processing_show
 
   # Defines the root path route ("/")
