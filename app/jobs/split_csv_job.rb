@@ -12,13 +12,13 @@ class SplitCsvJob < ApplicationJob
   
       csv.each do |row|
         # Sidekiq::Job を直接使っている前提: enqueue_to でキュー指定
-        Sidekiq::Client.enqueue_to(queue, ProcessCsvRowJob, row.to_h, type, report_id, path, token)
+        Sidekiq::Client.enqueue_to(queue, Report::ProcessCsvRowJob, row.to_h, type, report_id, path, token)
       end
   
       # Finalize（ポーリング型）も専用キューへ
       at = Time.zone.now.to_f # すぐに開始、足りなければジョブ内でsleep再投入
       Sidekiq::Client.push(
-        'class' => FinalizeReportJob,
+        'class' => Report::FinalizeReportJob,
         'queue' => queue,
         'args'  => [path, type, report_id, token, 10, 43200, Time.zone.now.to_i],
         'at'    => at

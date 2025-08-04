@@ -15,7 +15,7 @@ class CsvProcessingController < ApplicationController
       )
 
       # SplitCsvJobをエンキュー
-      SplitCsvJob.perform_later(csv_content, csv_type, report_id)
+      SplitCsvJob.perform_later(csv_content, csv_type, client_report.id)
 
       redirect_to csv_processing_status_path, notice: 'CSV処理を開始しました。'
     else
