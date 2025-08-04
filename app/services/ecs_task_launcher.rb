@@ -36,7 +36,12 @@ class EcsTaskLauncher
     #
     # @return [String] task_arn
     def start_once_for!(
-      token:, cluster:, task_definition:, container_name:, subnets:, security_groups:,
+      token:, 
+      cluster: ENV["ECS_CLUSTER"], 
+      task_definition: ENV["ECS_SIDEKIQ_TASK_DEFINITION"], 
+      container_name: "sidekiqContainer", 
+      subnets: ENV["ECS_SIDEKIQ_SUBNET_IDS"].split(","), 
+      security_groups: ENV["ECS_SIDEKIQ_SECURITY_GROUP_IDS"].split(","),
       assign_public_ip: "DISABLED", env: {}, capacity_providers: nil, tags: {},
       region: (ENV["AWS_REGION"] || "ap-northeast-1"),
       max_concurrent: nil, throttle_tag_key: "App", throttle_tag_value: "report"
