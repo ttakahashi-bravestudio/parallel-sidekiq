@@ -1,0 +1,47 @@
+# Rails開発環境用Dockerfile
+FROM ruby:3.4-alpine
+
+# 必要なパッケージをインストール
+RUN apk add --no-cache \
+    build-base \
+    tzdata \
+    nodejs \
+    npm \
+    sqlite-dev \
+    sqlite \
+    yaml-dev \
+    redis \
+    git \
+    bash \
+    curl \
+    && rm -rf /var/cache/apk/*
+
+# 作業ディレクトリを設定
+WORKDIR /app
+
+# GemfileとGemfile.lockをコピー
+COPY Gemfile Gemfile.lock ./
+
+# Bundlerをインストール
+RUN gem install bundler
+
+# 依存関係をインストール
+RUN bundle install
+
+# # package.jsonとyarn.lockをコピー（存在する場合）
+# COPY package.json yarn.lock* ./
+
+# # Node.jsの依存関係をインストール（存在する場合）
+# RUN if [ -f yarn.lock ]; then npm install -g yarn && yarn install; fi
+
+# アプリケーションのソースコードをコピー
+COPY . .
+
+# アセットのプリコンパイル（本番環境の場合）
+# RUN bundle exec rake assets:precompile
+
+# ポート3000を公開
+EXPOSE 3000
+
+# 開発サーバーを起動
+CMD ["rails", "server", "-b", "0.0.0.0"]

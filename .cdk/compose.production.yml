@@ -1,0 +1,25 @@
+services:
+  cdk:
+    build: .
+    tty: true
+    stdin_open: true
+    volumes:
+      - .:/app
+    environment:
+      ENVIRONMENT: "production"
+      GITHUB_CONNECTION_ARN: "arn:aws:codeconnections:ap-northeast-1:995112893597:connection/06b76e03-1608-4ea7-b2d7-ea6e7aa76e71"
+      S3_BUCKET_ARN: "arn:aws:s3:::dajpapp-production"
+      CDK_DEFAULT_REGION: "ap-northeast-1"
+      CDK_DEFAULT_ACCOUNT: "995112893597"
+      GITHUB_REPO_OWNER: "Bravestudio-Inc-JP"
+      GITHUB_REPO_NAME: "dajp_php83"
+      ECS_CPU: "1024"
+      ECS_MEMORY: "2048"
+      CERTIFICATE_ARN: "arn:aws:acm:ap-northeast-1:995112893597:certificate/42459fdd-b0e5-4179-a7d4-522f3becb73e"
+      ECS_DESIRED_COUNT: "0"
+      CONTACT_RECIPIENT_EMAIL: "dajp@discoveranotherjapan.com"
+      CDK_DISABLE_CLI_TELEMETRY: "1"
+      BCC_ADDRESS: "miyazaki@aristol.jp"
+      TOKEN_API_KEY: "315ea480-e3e9-4196-904d-e1f4de603126"
+      SENTRY_DSN: "https://616b035e4047d8abde880893a45047a2@o4509172601192453.ingest.us.sentry.io/4509715383975936"
+    command: ["cdk", "diff"]
