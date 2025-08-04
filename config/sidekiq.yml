@@ -1,4 +1,6 @@
 # :logfile: ./log/sidekiq.log  # 標準出力にログを出力するためコメントアウト
+:verbose: true
+:log_level: info
 :retry:
   :max_retries: 5
 :queues:
