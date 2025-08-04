@@ -2,7 +2,7 @@ class Report::FinalizeReportJob
     include Sidekiq::Job
     sidekiq_options queue: :report  # 実際は enqueue_to で上書きされる
   
-    def perform(path, type, report_id, token, interval_sec = 10, max_wait_sec = 3600, started_at = Time.now.to_i)
+    def perform(path, type, report_id, token, interval_sec = 10, max_wait_sec = 43200, started_at = Time.now.to_i)
       status = CsvProcessingStatus.find_by(token:)
       report = ClientReport.find(report_id)
       return if status&.finalized_at.present? || report.completed?

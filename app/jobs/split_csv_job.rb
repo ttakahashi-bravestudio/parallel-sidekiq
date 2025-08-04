@@ -8,7 +8,7 @@ class SplitCsvJob < ApplicationJob
       path  = "/tmp/reports/#{token}" # コンテナ内ローカル
   
       CsvProcessingStatus.create!(token:, total_count: csv.size, done_count: 0, queue_name: queue)
-      ClientReport.find(report_id).update!(status: :processing, token:)
+      # ClientReport.find(report_id).update!(status: :processing, token:)
   
       csv.each do |row|
         # Sidekiq::Job を直接使っている前提: enqueue_to でキュー指定
@@ -20,27 +20,32 @@ class SplitCsvJob < ApplicationJob
       Sidekiq::Client.push(
         'class' => FinalizeReportJob,
         'queue' => queue,
-        'args'  => [path, type, report_id, token, 10, 3600, Time.zone.now.to_i],
+        'args'  => [path, type, report_id, token, 10, 43200, Time.zone.now.to_i],
         'at'    => at
       )
   
-      # 専用ワーカー（そのキューだけを処理）を1タスク起動
-      EcsTaskLauncher.start_once_for!(
-        token: token,
-        cluster: ENV["ECS_CLUSTER"],
-        task_definition: ENV["ECS_TASK_DEFINITION_REPORT"],
-        container_name: ENV["ECS_CONTAINER_NAME"] || "worker",
-        subnets: ENV["ECS_SUBNET_IDS"].split(","),
-        security_groups: ENV["ECS_SECURITY_GROUP_IDS"].split(","),
-        assign_public_ip: "DISABLED",
-        env: {
-          "TOKEN" => token,
-          "QUEUE" => queue,
-          "SHUTDOWN_IDLE_SECONDS" => "300"
-        },
-        capacity_providers: [{ name: "FARGATE_SPOT", weight: 1 }, { name: "FARGATE", weight: 1 }],
-        tags: { "App" => "report", "Token" => token, "Env" => Rails.env }
-      )
+      begin
+        # 専用ワーカー（そのキューだけを処理）を1タスク起動
+        EcsTaskLauncher.start_once_for!(
+          token: token,
+          cluster: ENV["ECS_CLUSTER"],
+          task_definition: ENV["ECS_TASK_DEFINITION_REPORT"],
+          container_name: ENV["ECS_CONTAINER_NAME"] || "worker",
+          subnets: ENV["ECS_SUBNET_IDS"].split(","),
+          security_groups: ENV["ECS_SECURITY_GROUP_IDS"].split(","),
+          assign_public_ip: "DISABLED",
+          env: {
+            "TOKEN" => token,
+            "QUEUE" => queue,
+            "SHUTDOWN_IDLE_SECONDS" => "300"
+          },
+          capacity_providers: [{ name: "FARGATE_SPOT", weight: 1 }, { name: "FARGATE", weight: 1 }],
+          tags: { "App" => "report", "Token" => token, "Env" => Rails.env }
+        )
+      rescue => e
+        puts e.message
+      end
+
     end
   end
   

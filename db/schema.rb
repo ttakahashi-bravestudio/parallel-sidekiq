@@ -10,5 +10,15 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 0) do
+ActiveRecord::Schema[8.0].define(version: 2025_08_04_064544) do
+  create_table "csv_processing_statuses", force: :cascade do |t|
+    t.string "token", null: false
+    t.integer "total_count", default: 0, null: false
+    t.integer "done_count", default: 0, null: false
+    t.string "queue_name"
+    t.datetime "finalized_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["token"], name: "index_csv_processing_statuses_on_token", unique: true
+  end
 end
