@@ -10,6 +10,7 @@ import * as codedeploy from 'aws-cdk-lib/aws-codedeploy';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as elasticache from 'aws-cdk-lib/aws-elasticache';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 import * as resourcegroups from 'aws-cdk-lib/aws-resourcegroups';
 import * as appinsights from 'aws-cdk-lib/aws-applicationinsights';
@@ -19,15 +20,9 @@ export interface InfraStackProps extends cdk.StackProps {
   githubConnectionArn: string;
   githubRepoName: string;
   githubRepoOwner: string;
-  s3BucketArn?: string;
-  certificateArn: string;
   cpu?: number;
   memoryLimitMiB?: number;
   desiredCount: number;
-  contactRecipientEmail?: string;
-  bccAddress?: string;
-  tokenApiKey?: string;
-  sentryDsn?: string;
 }
 
 export class InfraStack extends cdk.Stack {
@@ -241,17 +236,21 @@ export class InfraStack extends cdk.Stack {
       })
     );
 
+    // S3バケットの作成
+    const s3Bucket = new s3.Bucket(this, 'AppBucket', {
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+      versioned: true,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+    });
 
-    
-    // S3バケットへのアクセス権限を追加
-    if (props.s3BucketArn) {
-      taskRole.addToPolicy(
-        new iam.PolicyStatement({
-          actions: ['s3:*'],
-          resources: [props.s3BucketArn, `${props.s3BucketArn}/*`],
-        })
-      );
-    }
+    // taskRoleにS3バケットへのアクセス権限を追加
+    taskRole.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ['s3:*'],
+        resources: [s3Bucket.bucketArn, `${s3Bucket.bucketArn}/*`],
+      })
+    );
 
     // ロググループの作成
     const logGroup = new logs.LogGroup(this, 'LogGroup', {
