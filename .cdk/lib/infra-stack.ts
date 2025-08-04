@@ -250,6 +250,21 @@ export class InfraStack extends cdk.Stack {
       })
     );
 
+    taskRole.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ['ecs:RunTask','ecs:ListTasks', 'ecs:DescribeTasks', 'ecs:DescribeTaskDefinition'],
+        resources: ['*'],
+        conditions: { 'ArnEquals': { 'ecs:cluster': cluster.clusterArn } },
+      })
+    );
+
+    taskRole.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ['iam:PassRole'],
+        resources: [taskExecutionRole.roleArn, taskRole.roleArn],
+      })
+    );
+
     // ロググループの作成
     const logGroup = new logs.LogGroup(this, 'LogGroup', {
       logGroupName: `/ecs/${generateResourceName('app')}`,
