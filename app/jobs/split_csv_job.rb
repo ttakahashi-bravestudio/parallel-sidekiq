@@ -8,7 +8,7 @@ class SplitCsvJob < ApplicationJob
       path  = "/tmp/reports/#{token}" # コンテナ内ローカル
   
       CsvProcessingStatus.create!(token:, total_count: csv.size, done_count: 0, queue_name: queue)
-      # ClientReport.find(report_id).update!(status: :processing, token:)
+      ClientReport.find(report_id).update!(status: :processing, token:)
   
       csv.each do |row|
         # Sidekiq::Job を直接使っている前提: enqueue_to でキュー指定
