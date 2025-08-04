@@ -325,6 +325,10 @@ export class InfraStack extends cdk.Stack {
       }),
       environment: {
         ENVIRONMENT: props.environment,
+        ECS_CLUSTER: cluster.clusterName,
+        ECS_SIDEKIQ_TASK_DEFINITION: sidekiqTaskDefinition.family,
+        ECS_SIDEKIQ_SUBNET_IDS: vpc.privateSubnets.map(subnet => subnet.subnetId).join(','),
+        ECS_SIDEKIQ_SECURITY_GROUP_IDS: ecsSecurityGroup.securityGroupId,
         REDIS_HOST: redis ? redis.attrPrimaryEndPointAddress : '',
         REDIS_PORT: redis ? redis.attrPrimaryEndPointPort : '',
         REDIS_URL: redis ? `${redis.attrPrimaryEndPointAddress}:${redis.attrPrimaryEndPointPort}` : ''
