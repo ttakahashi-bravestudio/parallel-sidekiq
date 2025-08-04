@@ -9,6 +9,7 @@ class Report::ProcessCsvRowJob
     # svc.generate_pdf(path, row['個別識別番号']) if type == 'pdf'
 
     # 完全なランダム値でtxtファイルを作成する処理（ファイル名にtokenを含める）
+    sleep 3
     filename = "random_#{token}_#{SecureRandom.hex(8)}.txt"
     random_content = Array.new(5) { SecureRandom.hex(16) }.join("\n")
     File.open(File.join(path, filename), "w") do |f|
