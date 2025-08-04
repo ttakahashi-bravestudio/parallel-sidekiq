@@ -257,11 +257,16 @@ export class InfraStack extends cdk.Stack {
         conditions: { 'ArnEquals': { 'ecs:cluster': cluster.clusterArn } },
       })
     );
-
     taskRole.addToPolicy(
       new iam.PolicyStatement({
         actions: ['iam:PassRole'],
         resources: [taskExecutionRole.roleArn, taskRole.roleArn],
+      })
+    );
+    taskRole.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ['ecs:TagResource'],
+        resources: ['*'],
       })
     );
 
