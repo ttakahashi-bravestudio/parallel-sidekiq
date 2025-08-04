@@ -1,0 +1,23 @@
+:logfile: ./log/sidekiq.log
+:retry:
+  :max_retries: 5
+:queues:
+  - default
+  - mailers
+  - push_notification
+  - report
+:concurrency: 5
+:scheduler:
+  :schedule:
+    progress_adjustment_job:
+      cron: '0 0 * * *'  # 毎日0時に実行
+      class: ProgressAdjustmentJob
+    admin_summary_job:
+      cron: '0 0 * * *'  # 毎日0時に実行
+      class: AdminSummarySenderJob
+    email_sender_jobs:
+      cron: '0 13 * * *' # 毎日 13 時に実行
+      class: EmailSenderJob
+    zoom_token_refresh_job:
+      cron: '30 1 * * 3' # 毎週水曜日 1:30 に実行
+      class: ZoomTokenRefreshJob

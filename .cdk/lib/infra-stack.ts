@@ -280,7 +280,7 @@ export class InfraStack extends cdk.Stack {
         ENVIRONMENT: props.environment,
         REDIS_HOST: redis ? redis.attrPrimaryEndPointAddress : '',
         REDIS_PORT: redis ? redis.attrPrimaryEndPointPort : '',
-        REDIS_URL: redis ? `redis://${redis.attrPrimaryEndPointAddress}:${redis.attrPrimaryEndPointPort}` : ''
+        REDIS_URL: redis ? `${redis.attrPrimaryEndPointAddress}:${redis.attrPrimaryEndPointPort}` : ''
       },
     });
 
@@ -307,7 +307,7 @@ export class InfraStack extends cdk.Stack {
         ENVIRONMENT: props.environment,
         REDIS_HOST: redis ? redis.attrPrimaryEndPointAddress : '',
         REDIS_PORT: redis ? redis.attrPrimaryEndPointPort : '',
-        REDIS_URL: redis ? `redis://${redis.attrPrimaryEndPointAddress}:${redis.attrPrimaryEndPointPort}` : ''
+        REDIS_URL: redis ? `${redis.attrPrimaryEndPointAddress}:${redis.attrPrimaryEndPointPort}` : ''
       },
     });
 

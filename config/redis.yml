@@ -1,0 +1,15 @@
+default: &default
+  db:
+    sidekiq: 0
+
+development:
+  <<: *default
+  host: redis
+
+test:
+  <<: *default
+  host: redis
+
+production:
+  <<: *default
+  host: <%= ENV.fetch('REDIS_URL') { 'localhost' } %>
