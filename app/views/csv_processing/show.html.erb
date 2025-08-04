@@ -1,0 +1,121 @@
+<div class="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+  <div class="max-w-2xl mx-auto">
+    <div class="mb-8">
+      <%= link_to "← 一覧に戻る", csv_processing_status_path, 
+          class: "text-blue-600 hover:text-blue-500 text-sm font-medium" %>
+    </div>
+
+    <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+      <div class="px-4 py-5 sm:px-6">
+        <h3 class="text-lg leading-6 font-medium text-gray-900">
+          処理状況詳細
+        </h3>
+        <p class="mt-1 max-w-2xl text-sm text-gray-500">
+          トークン: <%= @processing_status.token %>
+        </p>
+      </div>
+      <div class="border-t border-gray-200">
+        <dl>
+          <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+            <dt class="text-sm font-medium text-gray-500">ステータス</dt>
+            <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+              <% if @processing_status.done_count == @processing_status.total_count %>
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                  完了
+                </span>
+              <% elsif @processing_status.done_count > 0 %>
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                  処理中
+                </span>
+              <% else %>
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                  待機中
+                </span>
+              <% end %>
+            </dd>
+          </div>
+          <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+            <dt class="text-sm font-medium text-gray-500">進捗</dt>
+            <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+              <%= @processing_status.done_count %> / <%= @processing_status.total_count %>
+              (<%= number_to_percentage(@processing_status.total_count > 0 ? (@processing_status.done_count.to_f / @processing_status.total_count * 100) : 0, precision: 1) %>)
+            </dd>
+          </div>
+          <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+            <dt class="text-sm font-medium text-gray-500">キュー名</dt>
+            <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+              <%= @processing_status.queue_name %>
+            </dd>
+          </div>
+          <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+            <dt class="text-sm font-medium text-gray-500">作成日時</dt>
+            <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+              <%= @processing_status.created_at.strftime("%Y-%m-%d %H:%M:%S") %>
+            </dd>
+          </div>
+          <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+            <dt class="text-sm font-medium text-gray-500">更新日時</dt>
+            <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+              <%= @processing_status.updated_at.strftime("%Y-%m-%d %H:%M:%S") %>
+            </dd>
+          </div>
+        </dl>
+      </div>
+    </div>
+
+    <!-- プログレスバー -->
+    <div class="mt-6 bg-white shadow overflow-hidden sm:rounded-lg">
+      <div class="px-4 py-5 sm:px-6">
+        <h3 class="text-lg leading-6 font-medium text-gray-900">
+          進捗状況
+        </h3>
+      </div>
+      <div class="border-t border-gray-200 px-4 py-5 sm:px-6">
+        <div class="space-y-4">
+          <div>
+            <div class="flex justify-between text-sm text-gray-600 mb-2">
+              <span>処理済み: <%= @processing_status.done_count %></span>
+              <span>残り: <%= @processing_status.total_count - @processing_status.done_count %></span>
+            </div>
+            <div class="bg-gray-200 rounded-full h-4">
+              <div class="bg-blue-600 h-4 rounded-full transition-all duration-300" 
+                   style="width: <%= @processing_status.total_count > 0 ? (@processing_status.done_count.to_f / @processing_status.total_count * 100) : 0 %>%">
+              </div>
+            </div>
+          </div>
+          
+          <% if @processing_status.total_count > 0 %>
+            <div class="text-center text-sm text-gray-500">
+              <%= number_to_percentage(@processing_status.done_count.to_f / @processing_status.total_count * 100, precision: 1) %> 完了
+            </div>
+          <% end %>
+        </div>
+      </div>
+    </div>
+
+    <!-- 自動更新のためのJavaScript -->
+    <% if @processing_status.done_count < @processing_status.total_count %>
+      <script>
+        // 5秒ごとにページを更新
+        setTimeout(function() {
+          window.location.reload();
+        }, 5000);
+      </script>
+      
+      <div class="mt-4 text-center">
+        <div class="inline-flex items-center text-sm text-gray-500">
+          <svg class="animate-spin -ml-1 mr-3 h-4 w-4 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          5秒後に自動更新されます
+        </div>
+      </div>
+    <% end %>
+
+    <div class="mt-6 text-center">
+      <%= link_to "一覧に戻る", csv_processing_status_path, 
+          class: "inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500" %>
+    </div>
+  </div>
+</div> 

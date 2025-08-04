@@ -12,6 +12,14 @@ Rails.application.routes.draw do
   # get "manifest" => "rails/pwa#manifest", as: :pwa_manifest
   # get "service-worker" => "rails/pwa#service_worker", as: :pwa_service_worker
 
+  # CSV処理関連のルート
+  resources :csv_processing, only: [:new, :create] do
+    collection do
+      get :status
+    end
+  end
+  get 'csv_processing/:token', to: 'csv_processing#show', as: :csv_processing_show
+
   # Defines the root path route ("/")
-  # root "posts#index"
+  root "csv_processing#new"
 end
