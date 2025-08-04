@@ -31,6 +31,20 @@ class Report::FinalizeReportJob
         Zip::File.open(zip_path, Zip::File::CREATE) do |zipfile|
           Dir[File.join(path, '*')].each { |f| zipfile.add(File.basename(f), f) }
         end
+
+        # # S3にアップロード
+        # s3_client = Aws::S3::Client.new(region: ENV["AWS_REGION"])
+        # response = s3_client.put_object(
+        #   bucket: ENV["AWS_S3_BUCKET"],
+        #   key: "reports/#{token}.zip",
+        #   body: File.open(zip_path)
+        # )
+
+        # if response.successful?
+        #   report.file = response.body
+        #   report.count = Dir[File.join(path, '*')].count
+        #   report.status = :completed
+        #   report.save!
   
         report.file   = File.open(zip_path)
         report.count  = Dir[File.join(path, '*')].count
