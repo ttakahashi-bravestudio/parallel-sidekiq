@@ -28,6 +28,8 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_04_105122) do
     t.integer "total_count", default: 0, null: false
     t.integer "done_count", default: 0, null: false
     t.string "queue_name"
+    t.string "worker_task_arn"
+    t.datetime "worker_started_at"
     t.datetime "finalized_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
