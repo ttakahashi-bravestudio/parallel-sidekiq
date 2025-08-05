@@ -3,6 +3,9 @@ class Report::ProcessCsvRowJob
   sidekiq_options queue: :report # 実際は enqueue_to で上書きされる
 
   def perform(row, type, report_id, path, token)
+    # 受け取ったrowパラメータのエンコーディングを適切に処理
+    row = row.transform_values { |value| value&.force_encoding('UTF-8') } if row.is_a?(Hash)
+    
     FileUtils.mkdir_p(path)
     # svc = ReportService.new(row['個別識別番号'], row['保険者名'], row['年度'])
     # svc.generate_xlsx(path, row['個別識別番号'])

@@ -2,6 +2,8 @@ class SplitCsvJob < ApplicationJob
     queue_as :report
   
     def perform(csv_string, type, report_id)
+      # CSV文字列をUTF-8として明示的に処理
+      csv_string = csv_string.force_encoding('UTF-8')
       csv = CSV.parse(csv_string, headers: true)
       token = SecureRandom.uuid
       queue = QueueRouter.for_token(token)
@@ -11,8 +13,13 @@ class SplitCsvJob < ApplicationJob
       ClientReport.find(report_id).update!(status: :processing, token:)
   
       csv.each do |row|
+        # エンコーディング問題を回避するため、ハッシュをUTF-8で明示的に処理
+        row_hash = row.to_h.transform_values do |value|
+          value&.force_encoding('UTF-8')
+        end
+        
         # Sidekiq::Job を直接使っている前提: enqueue_to でキュー指定
-        Sidekiq::Client.enqueue_to(queue, Report::ProcessCsvRowJob, row.to_h, type, report_id, path, token)
+        Sidekiq::Client.enqueue_to(queue, Report::ProcessCsvRowJob, row_hash, type, report_id, path, token)
       end
   
       # Finalize（ポーリング型）も専用キューへ

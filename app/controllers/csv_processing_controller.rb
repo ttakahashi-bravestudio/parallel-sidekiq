@@ -5,7 +5,8 @@ class CsvProcessingController < ApplicationController
 
   def create
     if params[:csv_file].present?
-      csv_content = params[:csv_file].read
+      # CSVファイルをUTF-8として明示的に読み込み
+      csv_content = params[:csv_file].read.force_encoding('UTF-8')
       csv_type = params[:csv_type] || 'default'
       report_id = SecureRandom.uuid # 実際のアプリケーションでは適切なIDを生成
 
