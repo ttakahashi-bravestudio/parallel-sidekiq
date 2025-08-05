@@ -355,7 +355,7 @@ export class InfraStack extends cdk.Stack {
       targetType: elbv2.TargetType.IP,
       deregistrationDelay: cdk.Duration.seconds(60),
       healthCheck: {
-        path: '/health-check',
+        path: '/up',
         interval: cdk.Duration.seconds(60),
         timeout: cdk.Duration.seconds(5),
         healthyThresholdCount: 2,
@@ -371,7 +371,7 @@ export class InfraStack extends cdk.Stack {
       targetType: elbv2.TargetType.IP,
       deregistrationDelay: cdk.Duration.seconds(60),
       healthCheck: {
-        path: '/health-check',
+        path: '/up',
         interval: cdk.Duration.seconds(60),
         timeout: cdk.Duration.seconds(5),
         healthyThresholdCount: 2,
