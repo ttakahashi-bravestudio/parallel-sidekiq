@@ -4,7 +4,10 @@ class Report::FinalizeReportJob
     include Sidekiq::Job
     sidekiq_options queue: :report  # 実際は enqueue_to で上書きされる
   
-    def perform(path, type, report_id, token, interval_sec = 10, max_wait_sec = 43200, started_at = Time.now.to_i)
+      def perform(path, type, report_id, token, interval_sec = 10, max_wait_sec = 43200, started_at = Time.now.to_i)
+    Rails.logger.info "Starting FinalizeReportJob: path=#{path}, type=#{type}, report_id=#{report_id}, token=#{token}"
+    
+    begin
       status = CsvProcessingStatus.find_by(token:)
       report = ClientReport.find(report_id)
       return if status&.finalized_at.present? || report.completed?
@@ -59,6 +62,13 @@ class Report::FinalizeReportJob
       # 片付け（ローカル ephemeral storage はタスク終了で破棄されるが念のため）
       FileUtils.rm_rf(path) rescue nil
       CsvProcessingStatus.find_by(token:)&.destroy
+      
+      Rails.logger.info "Completed FinalizeReportJob successfully"
+    rescue => e
+      Rails.logger.error "FinalizeReportJob failed: #{e.class}: #{e.message}"
+      Rails.logger.error "Backtrace: #{e.backtrace.join("\n")}"
+      raise e
     end
+  end
   end
   
