@@ -162,4 +162,4 @@ class Report::FinalizeReportJob
     # 例: CloudWatch EventsでECSタスクの強制終了を監視
     Rails.logger.info "Notified external monitoring: token=#{token}, reason=#{reason}"
   end
-  
+end
