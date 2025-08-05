@@ -37,9 +37,8 @@ class SplitCsvJob < ApplicationJob
           env: {
             "TOKEN" => token,
             "QUEUE" => queue,
-            "CONCURRENCY" => "10",
           },
-          command: ["bundle", "exec", "sidekiq", "-q", "$QUEUE", "-c", "$CONCURRENCY"],
+          command: ["bundle", "exec", "sidekiq", "-q", queue, "-c", "10"],
           capacity_providers: nil, # デフォルトのFARGATEを使用
           tags: { "App" => "report", "Token" => token, "Env" => Rails.env }
         )
