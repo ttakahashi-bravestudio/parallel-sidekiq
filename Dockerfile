@@ -75,16 +75,16 @@ FROM base
 COPY --from=build "${BUNDLE_PATH}" "${BUNDLE_PATH}"
 COPY --from=build /rails /rails
 
+RUN chmod +x /rails/sidekiq_wrapper.sh
+
 # Run and own only the runtime files as a non-root user for security
 RUN groupadd --system --gid 1000 rails && \
     useradd rails --uid 1000 --gid 1000 --create-home --shell /bin/bash && \
-    chown -R rails:rails db log storage tmp
+    chown -R rails:rails db log storage tmp sidekiq_wrapper.sh
 USER 1000:1000
 
 # Entrypoint prepares the database.
 ENTRYPOINT ["/rails/bin/docker-entrypoint"]
-
-RUN chmod +x /rails/sidekiq_wrapper.sh
 
 # Start the server by default, this can be overwritten at runtime
 EXPOSE 3000

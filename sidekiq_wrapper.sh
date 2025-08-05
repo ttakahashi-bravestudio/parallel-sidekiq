@@ -1,4 +1,5 @@
-#!/bin/sh
+#!/bin/bash
+
 # sidekiq_wrapper.sh（概略）
 set -euo pipefail
 
