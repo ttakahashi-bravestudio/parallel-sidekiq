@@ -293,7 +293,7 @@ export class InfraStack extends cdk.Stack {
 
     taskRole.addToPolicy(
       new iam.PolicyStatement({
-        actions: ['ecs:RunTask','ecs:ListTasks', 'ecs:DescribeTasks', 'ecs:DescribeTaskDefinition'],
+        actions: ['ecs:RunTask','ecs:ListTasks', 'ecs:DescribeTasks', 'ecs:DescribeTaskDefinition', 'ecs:StopTask', 'ecs:ListClusters', 'ecs:DescribeClusters'],
         resources: ['*'],
         conditions: { 'ArnEquals': { 'ecs:cluster': cluster.clusterArn } },
       })
