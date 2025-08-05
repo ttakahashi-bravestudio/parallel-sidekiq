@@ -122,7 +122,7 @@ export class InfraStack extends cdk.Stack {
 
     ecsSecurityGroup.addIngressRule(
       albSecurityGroup,
-      ec2.Port.tcp(80),
+      ec2.Port.tcp(3000),
       'Allow traffic from ALB'
     );
 
@@ -295,7 +295,7 @@ export class InfraStack extends cdk.Stack {
         streamPrefix: 'ecs',
         logGroup,
       }),
-      portMappings: [{ containerPort: 3000 }],
+      portMappings: [{ containerPort: 3000, hostPort: 3000 }],
       environment: {
         ENVIRONMENT: props.environment,
         REDIS_HOST: redis ? redis.attrPrimaryEndPointAddress : '',
@@ -485,7 +485,7 @@ export class InfraStack extends cdk.Stack {
               'docker push $ECR_REPOSITORY_URI:$CODEBUILD_RESOLVED_SOURCE_VERSION',
               'docker push $ECR_REPOSITORY_URI:latest',
               'echo "Creating appspec.yaml for CodeDeploy"',
-              'bash -c \'cat > appspec.yaml <<EOF\nversion: 0.0\nResources:\n  - TargetService:\n      Type: AWS::ECS::Service\n      Properties:\n        TaskDefinition: <TASK_DEFINITION>\n        LoadBalancerInfo:\n          ContainerName: "AppContainer"\n          ContainerPort: 80\nEOF\'',
+              'bash -c \'cat > appspec.yaml <<EOF\nversion: 0.0\nResources:\n  - TargetService:\n      Type: AWS::ECS::Service\n      Properties:\n        TaskDefinition: <TASK_DEFINITION>\n        LoadBalancerInfo:\n          ContainerName: "AppContainer"\n          ContainerPort: 3000\nEOF\'',
               'cat appspec.yaml',
               'echo "Creating imagedefinitions.json"',
               'printf \'[{"name":"AppContainer","imageUri":"%s:%s"}]\' "$ECR_REPOSITORY_URI" "$CODEBUILD_RESOLVED_SOURCE_VERSION" > imagedefinitions.json',
@@ -634,7 +634,7 @@ export class InfraStack extends cdk.Stack {
               'docker push $ECR_REPOSITORY_URI:$CODEBUILD_RESOLVED_SOURCE_VERSION',
               'docker push $ECR_REPOSITORY_URI:latest',
               'echo "Creating imagedefinitions.json for CronService"',
-              'printf \'[{"name":"CronContainer","imageUri":"%s:%s"}]\' "$ECR_REPOSITORY_URI" "$CODEBUILD_RESOLVED_SOURCE_VERSION" > imagedefinitions.json',
+              'printf \'[{"name":"sidekiqContainer","imageUri":"%s:%s"}]\' "$ECR_REPOSITORY_URI" "$CODEBUILD_RESOLVED_SOURCE_VERSION" > imagedefinitions.json',
               'cat imagedefinitions.json',
             ],
           },
