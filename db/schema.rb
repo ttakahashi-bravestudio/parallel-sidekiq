@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_08_04_105122) do
+ActiveRecord::Schema[8.0].define(version: 2025_08_05_122653) do
   create_table "client_reports", force: :cascade do |t|
     t.string "security_hash"
     t.datetime "deleted_at"
@@ -33,6 +33,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_04_105122) do
     t.datetime "finalized_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.datetime "force_shutdown_at"
     t.index ["token"], name: "index_csv_processing_statuses_on_token", unique: true
   end
 end
