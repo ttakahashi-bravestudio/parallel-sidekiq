@@ -12,7 +12,7 @@ bundle exec sidekiq -q "$QUEUE" -c "$CONCURRENCY" &
 SID=$!
 
 # アイドル自己終了（任意）
-ruby - <<'RUBY'
+bundle exec ruby - <<'RUBY'
 require "sidekiq"
 idle = (ENV["SHUTDOWN_IDLE_SECONDS"] || "300").to_i
 queue = ENV["QUEUE"] || "default"
