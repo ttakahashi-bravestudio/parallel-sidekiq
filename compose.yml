@@ -29,7 +29,21 @@ services:
       - redis
     stdin_open: true
     tty: true
-
+    
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: bash #bundle exec sidekiq -q report-852193c3d3ad9652 -c 10 &
+    environment:
+      - RAILS_ENV=development
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - .:/app
+    depends_on:
+      - redis
+    stdin_open: true
+    tty: true
   redis:
     image: redis:7-alpine
     ports:

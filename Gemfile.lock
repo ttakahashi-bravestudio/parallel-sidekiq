@@ -354,6 +354,7 @@ DEPENDENCIES
   rails (~> 8.0.2)
   redis (>= 4.0.1)
   rubocop-rails-omakase
+  rubyzip
   securerandom
   selenium-webdriver
   sidekiq

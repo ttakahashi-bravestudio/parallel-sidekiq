@@ -1,3 +1,5 @@
+require 'zip'
+
 class Report::FinalizeReportJob
     include Sidekiq::Job
     sidekiq_options queue: :report  # 実際は enqueue_to で上書きされる
