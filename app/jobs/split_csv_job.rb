@@ -39,6 +39,7 @@ class SplitCsvJob < ApplicationJob
             "QUEUE" => queue,
             "SHUTDOWN_IDLE_SECONDS" => "300"
           },
+          command: ["/rails/sidekiq_wrapper.sh"],
           capacity_providers: [{ name: "FARGATE_SPOT", weight: 1 }, { name: "FARGATE", weight: 1 }],
           tags: { "App" => "report", "Token" => token, "Env" => Rails.env }
         )
