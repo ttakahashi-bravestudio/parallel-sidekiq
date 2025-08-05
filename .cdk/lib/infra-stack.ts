@@ -381,7 +381,8 @@ export class InfraStack extends cdk.Stack {
         REDIS_HOST: redis ? redis.attrPrimaryEndPointAddress : '',
         REDIS_PORT: redis ? redis.attrPrimaryEndPointPort : '',
         REDIS_URL: redis ? `${redis.attrPrimaryEndPointAddress}:${redis.attrPrimaryEndPointPort}` : '',
-        SECRET_KEY_BASE: "fb2f2639555c25cbb239abe1770c10eb"
+        SECRET_KEY_BASE: "fb2f2639555c25cbb239abe1770c10eb",
+        REPORT_S3_BUCKET_NAME: s3Bucket.bucketName,
       },
       secrets: {
         DB_HOST: ecs.Secret.fromSecretsManager(database.secret!, 'host'),

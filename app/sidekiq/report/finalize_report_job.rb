@@ -64,6 +64,18 @@ class Report::FinalizeReportJob
   
       # 片付け（ローカル ephemeral storage はタスク終了で破棄されるが念のため）
       FileUtils.rm_rf(path) rescue nil
+      
+      # ECSタスクを停止
+      # 環境変数で制御可能にし、権限エラーを適切に処理
+      if ENV["ECS_CLUSTER"].present?
+        begin
+          EcsTaskLauncher.stop_task_for!(token: token)
+        rescue => e
+          Rails.logger.warn "Failed to stop ECS task for token #{token}: #{e.message}"
+          # ECSタスク停止に失敗しても処理は継続
+        end
+      end
+      
       CsvProcessingStatus.find_by(token:)&.destroy
       
       Rails.logger.info "Completed FinalizeReportJob successfully"

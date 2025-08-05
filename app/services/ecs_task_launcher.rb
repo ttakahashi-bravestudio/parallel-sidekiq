@@ -76,6 +76,35 @@ class EcsTaskLauncher
       end
     end
 
+    # Public: ECSタスクを停止する
+    #
+    # @param token [String] バッチ識別子（ユニーク）
+    # @param cluster [String] ECS クラスタ ARN/Name（省略時は ENV["ECS_CLUSTER"]）
+    # @param region [String] AWS リージョン（省略時は ENV["AWS_REGION"]）
+    # @param reason [String] 停止理由（省略時は "Report completed"）
+    #
+    # @return [Boolean] 停止成功時はtrue
+    def stop_task_for!(token:, cluster: ENV["ECS_CLUSTER"], region: (ENV["AWS_REGION"] || "ap-northeast-1"), reason: "Report completed")
+      status = CsvProcessingStatus.find_by(token: token)
+      return false unless status&.worker_task_arn.present?
+
+      ecs = Aws::ECS::Client.new(region: region)
+      
+      begin
+        resp = ecs.stop_task(
+          cluster: cluster,
+          task: status.worker_task_arn,
+          reason: reason
+        )
+        
+        Rails.logger.info "Stopped ECS task: #{status.worker_task_arn} for token: #{token}"
+        true
+      rescue Aws::ECS::Errors::ServiceError => e
+        Rails.logger.error "Failed to stop ECS task: #{e.message}"
+        false
+      end
+    end
+
     # Public: 実体（RunTask + startedBy 二重検知 + リトライ + 同時実行上限オプション）
     #
     # @return [String] task_arn
