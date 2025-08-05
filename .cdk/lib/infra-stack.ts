@@ -300,7 +300,8 @@ export class InfraStack extends cdk.Stack {
         ENVIRONMENT: props.environment,
         REDIS_HOST: redis ? redis.attrPrimaryEndPointAddress : '',
         REDIS_PORT: redis ? redis.attrPrimaryEndPointPort : '',
-        REDIS_URL: redis ? `${redis.attrPrimaryEndPointAddress}:${redis.attrPrimaryEndPointPort}` : ''
+        REDIS_URL: redis ? `${redis.attrPrimaryEndPointAddress}:${redis.attrPrimaryEndPointPort}` : '',
+        SECRET_KEY_BASE: "fb2f2639555c25cbb239abe1770c10eb"
       },
     });
 
@@ -331,7 +332,8 @@ export class InfraStack extends cdk.Stack {
         ECS_SIDEKIQ_SECURITY_GROUP_IDS: ecsSecurityGroup.securityGroupId,
         REDIS_HOST: redis ? redis.attrPrimaryEndPointAddress : '',
         REDIS_PORT: redis ? redis.attrPrimaryEndPointPort : '',
-        REDIS_URL: redis ? `${redis.attrPrimaryEndPointAddress}:${redis.attrPrimaryEndPointPort}` : ''
+        REDIS_URL: redis ? `${redis.attrPrimaryEndPointAddress}:${redis.attrPrimaryEndPointPort}` : '',
+        SECRET_KEY_BASE: "fb2f2639555c25cbb239abe1770c10eb"
       },
     });
 
