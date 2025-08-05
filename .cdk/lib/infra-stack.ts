@@ -295,7 +295,7 @@ export class InfraStack extends cdk.Stack {
         streamPrefix: 'ecs',
         logGroup,
       }),
-      portMappings: [{ containerPort: 80 }],
+      portMappings: [{ containerPort: 3000 }],
       environment: {
         ENVIRONMENT: props.environment,
         REDIS_HOST: redis ? redis.attrPrimaryEndPointAddress : '',
