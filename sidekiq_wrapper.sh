@@ -1,5 +1,6 @@
 # sidekiq_wrapper.sh（概略）
 set -euo pipefail
+
 QUEUE="${QUEUE:-default}"
 CONCURRENCY="${CONCURRENCY:-10}"
 IDLE="${SHUTDOWN_IDLE_SECONDS:-300}"
