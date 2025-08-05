@@ -24,7 +24,7 @@ class SplitCsvJob < ApplicationJob
         'at'    => at
       )
   
-      begin
+      if ENV["LOCAL_SAVE"].blank?
         # 専用ワーカー（そのキューだけを処理）を1タスク起動
         EcsTaskLauncher.start_once_for!(
           token: token,
@@ -42,8 +42,6 @@ class SplitCsvJob < ApplicationJob
           capacity_providers: [{ name: "FARGATE_SPOT", weight: 1 }, { name: "FARGATE", weight: 1 }],
           tags: { "App" => "report", "Token" => token, "Env" => Rails.env }
         )
-      rescue => e
-        puts e.message
       end
 
     end

@@ -38,6 +38,7 @@ services:
     environment:
       - RAILS_ENV=development
       - REDIS_URL=redis://redis:6379/0
+      - LOCAL_SAVE=true
     volumes:
       - .:/app
     depends_on:
