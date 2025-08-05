@@ -7,6 +7,7 @@ QUEUE="${QUEUE:-default}"
 CONCURRENCY="${CONCURRENCY:-10}"
 IDLE="${SHUTDOWN_IDLE_SECONDS:-300}"
 
+cd /rails
 bundle exec sidekiq -q "$QUEUE" -c "$CONCURRENCY" &
 SID=$!
 
