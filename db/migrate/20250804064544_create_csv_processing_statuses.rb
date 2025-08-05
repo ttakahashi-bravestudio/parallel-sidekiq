@@ -5,6 +5,8 @@ class CreateCsvProcessingStatuses < ActiveRecord::Migration[8.0]
       t.integer :total_count, null: false, default: 0
       t.integer :done_count,  null: false, default: 0
       t.string :queue_name
+      t.string :worker_task_arn
+      t.datetime :worker_started_at
       t.datetime :finalized_at
 
       t.timestamps
