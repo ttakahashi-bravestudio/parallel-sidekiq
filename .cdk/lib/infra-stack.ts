@@ -374,6 +374,7 @@ export class InfraStack extends cdk.Stack {
       }),
       environment: {
         ENVIRONMENT: props.environment,
+        AWS_REGION: cdk.Stack.of(this).region,
         ECS_CLUSTER: cluster.clusterName,
         ECS_SIDEKIQ_TASK_DEFINITION: sidekiqTaskDefinition.family,
         ECS_SIDEKIQ_SUBNET_IDS: vpc.privateSubnets.map(subnet => subnet.subnetId).join(','),
