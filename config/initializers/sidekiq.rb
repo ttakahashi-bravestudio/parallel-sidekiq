@@ -21,7 +21,7 @@ Sidekiq.configure_server do |config|
   end
   
   # 例外発生時のログ出力設定
-  config.error_handlers << ->(ex, context) do
+  config.error_handlers << ->(ex, context, config) do
     job_class = context[:job]&.dig('class') || 'Unknown'
     job_args = context[:job]&.dig('args') || []
     
