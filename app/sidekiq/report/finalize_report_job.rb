@@ -2,9 +2,9 @@ require 'zip'
 
 class Report::FinalizeReportJob
     include Sidekiq::Job
-    sidekiq_options queue: :report  # 実際は enqueue_to で上書きされる
+    sidekiq_options queue: :report, retry: 3, dead: true  # 実際は enqueue_to で上書きされる
   
-      def perform(path, type, report_id, token, interval_sec = 10, max_wait_sec = 43200, started_at = Time.now.to_i)
+    def perform(path, type, report_id, token, interval_sec = 10, max_wait_sec = 43200, started_at = Time.now.to_i)
     Rails.logger.info "Starting FinalizeReportJob: path=#{path}, type=#{type}, report_id=#{report_id}, token=#{token}"
     
     begin
@@ -76,6 +76,20 @@ class Report::FinalizeReportJob
     rescue => e
       Rails.logger.error "FinalizeReportJob failed: #{e.class}: #{e.message}"
       Rails.logger.error "Backtrace: #{e.backtrace.join("\n")}"
+      
+      # 失敗時もECSタスクを停止する
+      if ENV["ECS_CLUSTER"].present?
+        stop_ecs_task_with_fallbacks(token)
+      end
+      
+      # レポートステータスを失敗に更新
+      begin
+        report = ClientReport.find(report_id)
+        report.update!(status: :failed) unless report.completed?
+      rescue => report_error
+        Rails.logger.error "Failed to update report status: #{report_error.message}"
+      end
+      
       raise e
     end
   end

@@ -14,9 +14,9 @@ FROM public.ecr.aws/docker/library/ruby:$RUBY_VERSION-slim AS base
 # Rails app lives here
 WORKDIR /rails
 
-# Install base packages
+# Install base packages including cron
 RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y curl libjemalloc2 libvips sqlite3 default-libmysqlclient-dev && \
+    apt-get install --no-install-recommends -y curl libjemalloc2 libvips sqlite3 default-libmysqlclient-dev cron && \
     rm -rf /var/lib/apt/lists /var/cache/apt/archives
 
 # Set production environment
@@ -71,11 +71,37 @@ FROM base
 COPY --from=build "${BUNDLE_PATH}" "${BUNDLE_PATH}"
 COPY --from=build /rails /rails
 
+# Create cron job file for ECS task monitoring
+RUN echo "# ECS Task Monitoring Jobs" > /etc/cron.d/ecs-monitor && \
+    echo "SHELL=/bin/bash" >> /etc/cron.d/ecs-monitor && \
+    echo "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" >> /etc/cron.d/ecs-monitor && \
+    echo "*/5 * * * * root cd /rails && bundle exec rails runner 'DeadLetterMonitorJob.perform_now' 2>&1 | logger -t ecs-monitor" >> /etc/cron.d/ecs-monitor && \
+    echo "*/10 * * * * root cd /rails && bundle exec rails runner 'ForceShutdownMonitorJob.perform_now' 2>&1 | logger -t ecs-monitor" >> /etc/cron.d/ecs-monitor && \
+    echo "*/15 * * * * root cd /rails && bundle exec rails runner 'IdleEcsTaskMonitorJob.perform_now' 2>&1 | logger -t ecs-monitor" >> /etc/cron.d/ecs-monitor && \
+    echo "" >> /etc/cron.d/ecs-monitor
+
+# Make cron job file executable
+RUN chmod 0644 /etc/cron.d/ecs-monitor
+
+# Create startup script
+RUN echo '#!/bin/bash' > /rails/start.sh && \
+    echo 'set -e' >> /rails/start.sh && \
+    echo '' >> /rails/start.sh && \
+    echo '# Start cron daemon with logging to stdout' >> /rails/start.sh && \
+    echo 'service cron start' >> /rails/start.sh && \
+    echo '' >> /rails/start.sh && \
+    echo '# Redirect syslog to stdout for cron logs' >> /rails/start.sh && \
+    echo 'tail -f /var/log/syslog | grep ecs-monitor &' >> /rails/start.sh && \
+    echo '' >> /rails/start.sh && \
+    echo '# Execute the original command' >> /rails/start.sh && \
+    echo 'exec "$@"' >> /rails/start.sh && \
+    chmod +x /rails/start.sh
+
 # Run and own only the runtime files as a non-root user for security
 RUN groupadd --system --gid 1000 rails && \
     useradd rails --uid 1000 --gid 1000 --create-home --shell /bin/bash && \
-    chown -R rails:rails db log storage tmp
-USER 1000:1000
+    chown -R rails:rails db log storage tmp && \
+    chown rails:rails /rails/start.sh
 
 # Entrypoint prepares the database.
 ENTRYPOINT ["/rails/bin/docker-entrypoint"]

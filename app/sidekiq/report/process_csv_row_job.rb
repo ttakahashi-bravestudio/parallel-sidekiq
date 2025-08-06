@@ -1,6 +1,6 @@
 class Report::ProcessCsvRowJob
   include Sidekiq::Job
-  sidekiq_options queue: :report # 実際は enqueue_to で上書きされる
+  sidekiq_options queue: :report, retry: 3, dead: true # 実際は enqueue_to で上書きされる
 
   def perform(row, type, report_id, path, token)
     FileUtils.mkdir_p(path)
