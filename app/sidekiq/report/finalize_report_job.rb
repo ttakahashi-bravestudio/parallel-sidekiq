@@ -40,11 +40,11 @@ class Report::FinalizeReportJob
 
         upload_success = false
         
-        if ENV["LOCAL_SAVE"].blank?
+        if ENV["LOCAL_SAVE"].blank? && ENV["REPORT_S3_BUCKET_NAME"].present?
           # S3にアップロード
           s3_client = Aws::S3::Client.new(region: ENV["AWS_REGION"])
           response = s3_client.put_object(
-            bucket: ENV["AWS_S3_BUCKET"],
+            bucket: ENV["REPORT_S3_BUCKET_NAME"],
             key: "reports/#{token}.zip",
             body: File.open(zip_path)
           )
@@ -53,7 +53,7 @@ class Report::FinalizeReportJob
             # S3アップロードの完了を確認
             begin
               s3_client.head_object(
-                bucket: ENV["AWS_S3_BUCKET"],
+                bucket: ENV["REPORT_S3_BUCKET_NAME"],
                 key: "reports/#{token}.zip"
               )
               Rails.logger.info "S3 upload completed and verified for token: #{token}"
@@ -109,10 +109,10 @@ class Report::FinalizeReportJob
       # S3アップロード失敗の場合は、ファイルの削除を試行
       if e.message.include?("S3 upload") || e.message.include?("Upload failed")
         begin
-          if ENV["LOCAL_SAVE"].blank? && ENV["AWS_S3_BUCKET"].present?
+          if ENV["LOCAL_SAVE"].blank? && ENV["REPORT_S3_BUCKET_NAME"].present?
             s3_client = Aws::S3::Client.new(region: ENV["AWS_REGION"])
             s3_client.delete_object(
-              bucket: ENV["AWS_S3_BUCKET"],
+              bucket: ENV["REPORT_S3_BUCKET_NAME"],
               key: "reports/#{token}.zip"
             )
             Rails.logger.info "Cleaned up partial S3 upload for token: #{token}"
