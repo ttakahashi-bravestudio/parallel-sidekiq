@@ -55,9 +55,6 @@ RUN yarn install --immutable
 # Copy application code
 COPY . .
 
-# Make sidekiq_wrapper.sh executable
-RUN chmod +x /rails/sidekiq_wrapper.sh
-
 # Precompile bootsnap code for faster boot times
 RUN bundle exec bootsnap precompile app/ lib/
 
