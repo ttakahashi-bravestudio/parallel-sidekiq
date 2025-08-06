@@ -12,6 +12,7 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import * as elasticache from 'aws-cdk-lib/aws-elasticache';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
+import * as rds from 'aws-cdk-lib/aws-rds';
 
 export interface InfraStackProps extends cdk.StackProps {
   environment: string;
@@ -100,6 +101,13 @@ export class InfraStack extends cdk.Stack {
       allowAllOutbound: true,
     });
 
+    const rdsSecurityGroup = new ec2.SecurityGroup(this, 'RdsSecurityGroup', {
+      vpc,
+      securityGroupName: generateResourceName('rds-sg'),
+      description: 'Security group for RDS',
+      allowAllOutbound: false,
+    });
+
     // Valkeyのセキュリティグループ
     let redisSecurityGroup = new ec2.SecurityGroup(this, 'ValkeySecurityGroup', {
       vpc,
@@ -124,6 +132,12 @@ export class InfraStack extends cdk.Stack {
       albSecurityGroup,
       ec2.Port.tcp(3000),
       'Allow traffic from ALB'
+    );
+
+    rdsSecurityGroup.addIngressRule(
+      ecsSecurityGroup,
+      ec2.Port.tcp(3306),
+      'Allow MySQL traffic from ECS'
     );
 
     // Valkey ElastiCacheの作成
@@ -161,6 +175,33 @@ export class InfraStack extends cdk.Stack {
         'Allow Valkey traffic from ECS'
       );
     }
+
+    // RDSインスタンスの作成
+    const database = new rds.DatabaseInstance(this, 'Database', {
+      engine: rds.DatabaseInstanceEngine.mysql({
+        version: rds.MysqlEngineVersion.VER_8_4_5,
+      }),
+      vpc,
+      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T4G,
+        props.environment === 'production' ? ec2.InstanceSize.SMALL : ec2.InstanceSize.MICRO
+      ),
+      credentials: rds.Credentials.fromGeneratedSecret('dbadmin'),
+      allocatedStorage: 20,
+      maxAllocatedStorage: 100,
+      securityGroups: [rdsSecurityGroup],
+      preferredBackupWindow: '03:00-04:00',
+      preferredMaintenanceWindow: 'Mon:04:00-Mon:05:00',
+      multiAz: props.environment === 'production', // 本番環境でのみマルチAZを有効化
+      autoMinorVersionUpgrade: true,
+      removalPolicy: cdk.RemovalPolicy.SNAPSHOT,
+      databaseName: `${generateResourceName('db').replace(/[^a-zA-Z0-9]/g, '')}`, // データベース名から無効な文字を削除
+      instanceIdentifier: generateResourceName('db'),
+      monitoringInterval: cdk.Duration.minutes(1),
+      enablePerformanceInsights: false,
+      deleteAutomatedBackups: props.environment !== 'production', // 本番環境以外は自動バックアップを削除
+    });
 
     // ECRリポジトリの作成
     const ecrRepository = new ecr.Repository(this, 'EcrRepository', {
@@ -252,7 +293,7 @@ export class InfraStack extends cdk.Stack {
 
     taskRole.addToPolicy(
       new iam.PolicyStatement({
-        actions: ['ecs:RunTask','ecs:ListTasks', 'ecs:DescribeTasks', 'ecs:DescribeTaskDefinition'],
+        actions: ['ecs:RunTask','ecs:ListTasks', 'ecs:DescribeTasks', 'ecs:DescribeTaskDefinition', 'ecs:StopTask', 'ecs:ListClusters', 'ecs:DescribeClusters'],
         resources: ['*'],
         conditions: { 'ArnEquals': { 'ecs:cluster': cluster.clusterArn } },
       })
@@ -303,6 +344,13 @@ export class InfraStack extends cdk.Stack {
         REDIS_URL: redis ? `${redis.attrPrimaryEndPointAddress}:${redis.attrPrimaryEndPointPort}` : '',
         SECRET_KEY_BASE: "fb2f2639555c25cbb239abe1770c10eb"
       },
+      secrets: {
+        DB_HOST: ecs.Secret.fromSecretsManager(database.secret!, 'host'),
+        DB_PORT: ecs.Secret.fromSecretsManager(database.secret!, 'port'),
+        DB_NAME: ecs.Secret.fromSecretsManager(database.secret!, 'dbname'),
+        DB_USER: ecs.Secret.fromSecretsManager(database.secret!, 'username'),
+        DB_PASSWORD: ecs.Secret.fromSecretsManager(database.secret!, 'password'),
+      },
     });
 
     // sidekiqタスク定義の作成
@@ -333,8 +381,17 @@ export class InfraStack extends cdk.Stack {
         REDIS_HOST: redis ? redis.attrPrimaryEndPointAddress : '',
         REDIS_PORT: redis ? redis.attrPrimaryEndPointPort : '',
         REDIS_URL: redis ? `${redis.attrPrimaryEndPointAddress}:${redis.attrPrimaryEndPointPort}` : '',
-        SECRET_KEY_BASE: "fb2f2639555c25cbb239abe1770c10eb"
+        SECRET_KEY_BASE: "fb2f2639555c25cbb239abe1770c10eb",
+        REPORT_S3_BUCKET_NAME: s3Bucket.bucketName,
       },
+      secrets: {
+        DB_HOST: ecs.Secret.fromSecretsManager(database.secret!, 'host'),
+        DB_PORT: ecs.Secret.fromSecretsManager(database.secret!, 'port'),
+        DB_NAME: ecs.Secret.fromSecretsManager(database.secret!, 'dbname'),
+        DB_USER: ecs.Secret.fromSecretsManager(database.secret!, 'username'),
+        DB_PASSWORD: ecs.Secret.fromSecretsManager(database.secret!, 'password'),
+      },
+      command: ['bundle', 'exec', 'sidekiq', '-C', 'config/sidekiq.yml'],
     });
 
     // ロードバランサーの作成

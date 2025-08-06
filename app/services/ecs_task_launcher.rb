@@ -27,6 +27,7 @@ class EcsTaskLauncher
     # @param security_groups [Array<String>] SG ID
     # @param assign_public_ip [String] "ENABLED"/"DISABLED"
     # @param env [Hash] コンテナ環境変数
+    # @param command [Array<String>,nil] コンテナコマンド（省略時は上書きしない）
     # @param capacity_providers [Array<Hash>] [{name:, weight:}] or nil
     # @param tags [Hash] RunTask に付けるタグ
     # @param region [String] AWS リージョン（省略時は ENV["AWS_REGION"]）
@@ -42,7 +43,7 @@ class EcsTaskLauncher
       container_name: "sidekiqContainer", 
       subnets: ENV["ECS_SIDEKIQ_SUBNET_IDS"].split(","), 
       security_groups: ENV["ECS_SIDEKIQ_SECURITY_GROUP_IDS"].split(","),
-      assign_public_ip: "DISABLED", env: {}, capacity_providers: nil, tags: {},
+      assign_public_ip: "DISABLED", env: {}, command: nil, capacity_providers: nil, tags: {},
       region: (ENV["AWS_REGION"] || "ap-northeast-1"),
       max_concurrent: nil, throttle_tag_key: "App", throttle_tag_value: "report"
     )
@@ -60,6 +61,7 @@ class EcsTaskLauncher
             security_groups: security_groups,
             assign_public_ip: assign_public_ip,
             env: env,
+            command: command,
             capacity_providers: capacity_providers,
             tags: tags,
             region: region,
@@ -74,12 +76,41 @@ class EcsTaskLauncher
       end
     end
 
+    # Public: ECSタスクを停止する
+    #
+    # @param token [String] バッチ識別子（ユニーク）
+    # @param cluster [String] ECS クラスタ ARN/Name（省略時は ENV["ECS_CLUSTER"]）
+    # @param region [String] AWS リージョン（省略時は ENV["AWS_REGION"]）
+    # @param reason [String] 停止理由（省略時は "Report completed"）
+    #
+    # @return [Boolean] 停止成功時はtrue
+    def stop_task_for!(token:, cluster: ENV["ECS_CLUSTER"], region: (ENV["AWS_REGION"] || "ap-northeast-1"), reason: "Report completed")
+      status = CsvProcessingStatus.find_by(token: token)
+      return false unless status&.worker_task_arn.present?
+
+      ecs = Aws::ECS::Client.new(region: region)
+      
+      begin
+        resp = ecs.stop_task(
+          cluster: cluster,
+          task: status.worker_task_arn,
+          reason: reason
+        )
+        
+        Rails.logger.info "Stopped ECS task: #{status.worker_task_arn} for token: #{token}"
+        true
+      rescue Aws::ECS::Errors::ServiceError => e
+        Rails.logger.error "Failed to stop ECS task: #{e.message}"
+        false
+      end
+    end
+
     # Public: 実体（RunTask + startedBy 二重検知 + リトライ + 同時実行上限オプション）
     #
     # @return [String] task_arn
     def start!(
       token:, cluster:, task_definition:, container_name:, subnets:, security_groups:,
-      assign_public_ip: "DISABLED", env: {}, capacity_providers: nil, tags: {},
+      assign_public_ip: "DISABLED", env: {}, command: nil, capacity_providers: nil, tags: {},
       region: (ENV["AWS_REGION"] || "ap-northeast-1"),
       max_concurrent: nil, throttle_tag_key: "App", throttle_tag_value: "report"
     )
@@ -120,8 +151,9 @@ class EcsTaskLauncher
             container_overrides: [
               {
                 name: container_name,
-                environment: env.map { |k, v| { name: k.to_s, value: v.to_s } }
-              }
+                environment: env.map { |k, v| { name: k.to_s, value: v.to_s } },
+                command: command
+              }.compact
             ]
           },
           tags: tags.map { |k, v| { key: k.to_s, value: v.to_s } }

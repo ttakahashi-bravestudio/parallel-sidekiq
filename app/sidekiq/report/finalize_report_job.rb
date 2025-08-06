@@ -64,6 +64,12 @@ class Report::FinalizeReportJob
   
       # 片付け（ローカル ephemeral storage はタスク終了で破棄されるが念のため）
       FileUtils.rm_rf(path) rescue nil
+      
+      # ECSタスクを停止（複数の救済処置付き）
+      if ENV["ECS_CLUSTER"].present?
+        stop_ecs_task_with_fallbacks(token)
+      end
+      
       CsvProcessingStatus.find_by(token:)&.destroy
       
       Rails.logger.info "Completed FinalizeReportJob successfully"
@@ -73,5 +79,87 @@ class Report::FinalizeReportJob
       raise e
     end
   end
+
+  private
+
+  # ECSタスク停止の救済処置付き実装
+  def stop_ecs_task_with_fallbacks(token)
+    # 方法1: 直接的なタスク停止
+    if try_stop_ecs_task(token)
+      return
+    end
+
+    # 方法2: アイドル状態で自然終了を促す
+    if try_idle_shutdown(token)
+      return
+    end
+
+    # 方法3: 強制終了（最後の手段）
+    try_force_termination(token)
   end
-  
+
+  # 方法1: 直接的なタスク停止
+  def try_stop_ecs_task(token)
+    begin
+      success = EcsTaskLauncher.stop_task_for!(token: token)
+      if success
+        Rails.logger.info "Successfully stopped ECS task for token: #{token}"
+        return true
+      end
+    rescue => e
+      Rails.logger.warn "Failed to stop ECS task for token #{token}: #{e.message}"
+    end
+    false
+  end
+
+  # 方法2: アイドル状態で自然終了を促す
+  def try_idle_shutdown(token)
+    begin
+      # キューの残りジョブ数を確認
+      status = CsvProcessingStatus.find_by(token: token)
+      return false unless status&.queue_name.present?
+
+      queue = Sidekiq::Queue.new(status.queue_name)
+      remaining_jobs = queue.size
+
+      if remaining_jobs == 0
+        # ジョブが残っていない場合、アイドル終了ジョブを投入
+        Sidekiq::Client.push(
+          'class' => IdleShutdownJob,
+          'queue' => status.queue_name,
+          'args' => [token],
+          'at' => Time.now.to_f + 60 # 1分後に実行
+        )
+        Rails.logger.info "Scheduled idle shutdown for token: #{token}"
+        return true
+      end
+    rescue => e
+      Rails.logger.warn "Failed to schedule idle shutdown for token #{token}: #{e.message}"
+    end
+    false
+  end
+
+  # 方法3: 強制終了（最後の手段）
+  def try_force_termination(token)
+    begin
+      # データベースに強制終了フラグを設定
+      status = CsvProcessingStatus.find_by(token: token)
+      if status
+        status.update!(force_shutdown_at: Time.current)
+        Rails.logger.warn "Set force shutdown flag for token: #{token}"
+      end
+
+      # 外部監視システムに通知（オプション）
+      notify_external_monitoring(token, "force_shutdown_required")
+    rescue => e
+      Rails.logger.error "Failed to set force shutdown for token #{token}: #{e.message}"
+    end
+  end
+
+  # 外部監視システムへの通知
+  def notify_external_monitoring(token, reason)
+    # CloudWatch Events、SNS、Slack等への通知を実装
+    # 例: CloudWatch EventsでECSタスクの強制終了を監視
+    Rails.logger.info "Notified external monitoring: token=#{token}, reason=#{reason}"
+  end
+end

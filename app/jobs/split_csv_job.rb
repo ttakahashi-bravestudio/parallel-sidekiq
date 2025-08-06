@@ -36,17 +36,17 @@ class SplitCsvJob < ApplicationJob
         EcsTaskLauncher.start_once_for!(
           token: token,
           cluster: ENV["ECS_CLUSTER"],
-          task_definition: ENV["ECS_TASK_DEFINITION_REPORT"],
-          container_name: ENV["ECS_CONTAINER_NAME"] || "worker",
-          subnets: ENV["ECS_SUBNET_IDS"].split(","),
-          security_groups: ENV["ECS_SECURITY_GROUP_IDS"].split(","),
+          task_definition: ENV["ECS_SIDEKIQ_TASK_DEFINITION"],
+          container_name: "sidekiqContainer",
+          subnets: ENV["ECS_SIDEKIQ_SUBNET_IDS"].split(","),
+          security_groups: ENV["ECS_SIDEKIQ_SECURITY_GROUP_IDS"].split(","),
           assign_public_ip: "DISABLED",
           env: {
             "TOKEN" => token,
             "QUEUE" => queue,
-            "SHUTDOWN_IDLE_SECONDS" => "300"
           },
-          capacity_providers: [{ name: "FARGATE_SPOT", weight: 1 }, { name: "FARGATE", weight: 1 }],
+          command: ["bundle", "exec", "sidekiq", "-q", queue, "-c", "10"],
+          capacity_providers: nil, # デフォルトのFARGATEを使用
           tags: { "App" => "report", "Token" => token, "Env" => Rails.env }
         )
       end
