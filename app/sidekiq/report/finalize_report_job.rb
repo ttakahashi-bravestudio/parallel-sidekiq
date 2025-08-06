@@ -37,6 +37,8 @@ class Report::FinalizeReportJob
           Dir[File.join(path, '*')].each { |f| zipfile.add(File.basename(f), f) }
         end
 
+                upload_success = false
+        
         if ENV["LOCAL_SAVE"].blank?
           # S3にアップロード
           s3_client = Aws::S3::Client.new(region: ENV["AWS_REGION"])
@@ -47,30 +49,53 @@ class Report::FinalizeReportJob
           )
 
           if response.successful?
-            report.file = response.body
-            report.count = Dir[File.join(path, '*')].count
-            report.status = :completed
-            report.save!
+            # S3アップロードの完了を確認
+            begin
+              s3_client.head_object(
+                bucket: ENV["AWS_S3_BUCKET"],
+                key: "reports/#{token}.zip"
+              )
+              Rails.logger.info "S3 upload completed and verified for token: #{token}"
+              upload_success = true
+              
+              report.file = response.body
+              report.count = Dir[File.join(path, '*')].count
+              report.status = :completed
+              report.save!
+            rescue Aws::S3::Errors::NotFound
+              Rails.logger.error "S3 upload verification failed - file not found for token: #{token}"
+              raise "S3 upload verification failed"
+            end
+          else
+            Rails.logger.error "S3 upload failed for token: #{token}"
+            raise "S3 upload failed"
           end
         else
           report.file = File.open(zip_path)
           report.count = Dir[File.join(path, '*')].count
           report.status = :completed
           report.save!
+          upload_success = true
         end
-  
+
         s.update!(finalized_at: Time.current)
       end
-  
-      # 片付け（ローカル ephemeral storage はタスク終了で破棄されるが念のため）
-      FileUtils.rm_rf(path) rescue nil
-      
-      # Redisキューをクリア（ECSタスク停止前に実行）
-      clear_redis_queue_for_token(token, "FinalizeReportJob completion")
-      
-      # ECSタスクを停止（複数の救済処置付き）
-      if ENV["ECS_CLUSTER"].present?
-        stop_ecs_task_with_fallbacks(token)
+
+      # S3アップロードが成功した場合のみ、クリーンアップとECSタスク停止を実行
+      if upload_success
+        # 片付け（ローカル ephemeral storage はタスク終了で破棄されるが念のため）
+        FileUtils.rm_rf(path) rescue nil
+        
+        # Redisキューをクリア（ECSタスク停止前に実行）
+        clear_redis_queue_for_token(token, "FinalizeReportJob completion")
+        
+        # ECSタスクを停止（複数の救済処置付き）
+        if ENV["ECS_CLUSTER"].present?
+          stop_ecs_task_with_fallbacks(token)
+        end
+      else
+        Rails.logger.error "Skipping cleanup and ECS task stop due to upload failure for token: #{token}"
+        raise "Upload failed - preventing early task termination"
       end
       
       CsvProcessingStatus.find_by(token:)&.destroy
@@ -79,6 +104,22 @@ class Report::FinalizeReportJob
     rescue => e
       Rails.logger.error "FinalizeReportJob failed: #{e.class}: #{e.message}"
       Rails.logger.error "Backtrace: #{e.backtrace.join("\n")}"
+      
+      # S3アップロード失敗の場合は、ファイルの削除を試行
+      if e.message.include?("S3 upload") || e.message.include?("Upload failed")
+        begin
+          if ENV["LOCAL_SAVE"].blank? && ENV["AWS_S3_BUCKET"].present?
+            s3_client = Aws::S3::Client.new(region: ENV["AWS_REGION"])
+            s3_client.delete_object(
+              bucket: ENV["AWS_S3_BUCKET"],
+              key: "reports/#{token}.zip"
+            )
+            Rails.logger.info "Cleaned up partial S3 upload for token: #{token}"
+          end
+        rescue => cleanup_error
+          Rails.logger.warn "Failed to cleanup S3 object for token #{token}: #{cleanup_error.message}"
+        end
+      end
       
       # 失敗時もRedisキューをクリア＆ECSタスクを停止する
       clear_redis_queue_for_token(token, "FinalizeReportJob failure")
