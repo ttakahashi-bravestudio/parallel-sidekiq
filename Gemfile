@@ -25,6 +25,7 @@ gem "sidekiq"
 gem "csv"
 gem "securerandom"
 gem 'aws-sdk-ecs'
+gem 'aws-sdk-s3'
 gem "rubyzip"
 gem "mysql2"
 

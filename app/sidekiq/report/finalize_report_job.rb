@@ -1,4 +1,5 @@
 require 'zip'
+require 'aws-sdk-s3'
 
 class Report::FinalizeReportJob
     include Sidekiq::Job
