@@ -2,9 +2,9 @@ require 'zip'
 
 class Report::FinalizeReportJob
     include Sidekiq::Job
-    sidekiq_options queue: :report  # 実際は enqueue_to で上書きされる
+    sidekiq_options queue: :report, retry: 3, dead: true  # 実際は enqueue_to で上書きされる
   
-      def perform(path, type, report_id, token, interval_sec = 10, max_wait_sec = 43200, started_at = Time.now.to_i)
+    def perform(path, type, report_id, token, interval_sec = 10, max_wait_sec = 43200, started_at = Time.now.to_i)
     Rails.logger.info "Starting FinalizeReportJob: path=#{path}, type=#{type}, report_id=#{report_id}, token=#{token}"
     
     begin
@@ -65,6 +65,9 @@ class Report::FinalizeReportJob
       # 片付け（ローカル ephemeral storage はタスク終了で破棄されるが念のため）
       FileUtils.rm_rf(path) rescue nil
       
+      # Redisキューをクリア（ECSタスク停止前に実行）
+      clear_redis_queue_for_token(token, "FinalizeReportJob completion")
+      
       # ECSタスクを停止（複数の救済処置付き）
       if ENV["ECS_CLUSTER"].present?
         stop_ecs_task_with_fallbacks(token)
@@ -76,6 +79,22 @@ class Report::FinalizeReportJob
     rescue => e
       Rails.logger.error "FinalizeReportJob failed: #{e.class}: #{e.message}"
       Rails.logger.error "Backtrace: #{e.backtrace.join("\n")}"
+      
+      # 失敗時もRedisキューをクリア＆ECSタスクを停止する
+      clear_redis_queue_for_token(token, "FinalizeReportJob failure")
+      
+      if ENV["ECS_CLUSTER"].present?
+        stop_ecs_task_with_fallbacks(token)
+      end
+      
+      # レポートステータスを失敗に更新
+      begin
+        report = ClientReport.find(report_id)
+        report.update!(status: :failed) unless report.completed?
+      rescue => report_error
+        Rails.logger.error "Failed to update report status: #{report_error.message}"
+      end
+      
       raise e
     end
   end
@@ -161,5 +180,25 @@ class Report::FinalizeReportJob
     # CloudWatch Events、SNS、Slack等への通知を実装
     # 例: CloudWatch EventsでECSタスクの強制終了を監視
     Rails.logger.info "Notified external monitoring: token=#{token}, reason=#{reason}"
+  end
+
+  # Redisキューをクリアする処理
+  def clear_redis_queue_for_token(token, reason)
+    return unless token.present?
+
+    begin
+      success = QueueRouter.clear_all_jobs_for_token(token, reason: reason)
+      
+      if success
+        Rails.logger.info "Successfully cleared Redis queue for token: #{token} (reason: #{reason})"
+      else
+        Rails.logger.warn "Failed to clear Redis queue for token: #{token} (reason: #{reason})"
+      end
+      
+      success
+    rescue => e
+      Rails.logger.error "Error clearing Redis queue for token #{token}: #{e.class}: #{e.message}"
+      false
+    end
   end
 end

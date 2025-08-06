@@ -14,6 +14,12 @@ Sidekiq.configure_server do |config|
     url: "redis://#{redis_config['host']}/#{redis_config['db']}"
   }
   
+  # デフォルトのリトライ回数を制限（ジョブ固有の設定で上書き可能）
+  config.death_handlers << ->(job, ex) do
+    Rails.logger.error "Job #{job['class']} died after #{job['retry_count']} retries"
+    Rails.logger.error "Error: #{ex.class}: #{ex.message}"
+  end
+  
   # 例外発生時のログ出力設定
   config.error_handlers << ->(ex, context) do
     job_class = context[:job]&.dig('class') || 'Unknown'
