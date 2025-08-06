@@ -59,7 +59,8 @@ class Report::FinalizeReportJob
               Rails.logger.info "S3 upload completed and verified for token: #{token}"
               upload_success = true
               
-              report.file = response.body
+              # S3オブジェクトキーを保存
+              report.file = "reports/#{token}.zip"
               report.count = Dir[File.join(path, '*')].count
               report.status = :completed
               report.save!
