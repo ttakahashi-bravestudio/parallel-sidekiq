@@ -37,7 +37,7 @@ class Report::FinalizeReportJob
           Dir[File.join(path, '*')].each { |f| zipfile.add(File.basename(f), f) }
         end
 
-                upload_success = false
+        upload_success = false
         
         if ENV["LOCAL_SAVE"].blank?
           # S3にアップロード
