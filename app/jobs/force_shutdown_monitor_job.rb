@@ -13,6 +13,9 @@ class ForceShutdownMonitorJob < ApplicationJob
       force_shutdown_statuses.each do |status|
         Rails.logger.warn "Found force shutdown flag for token: #{status.token}"
         
+        # Redisキューをクリア
+        clear_redis_queue_for_token(status.token, "ForceShutdownMonitorJob")
+        
         # ECSタスクを強制停止
         if ENV["ECS_CLUSTER"].present?
           force_stop_ecs_task(status)
@@ -88,6 +91,26 @@ class ForceShutdownMonitorJob < ApplicationJob
       Rails.logger.info "Cleaned up status record for token: #{status.token}"
     rescue => e
       Rails.logger.error "Failed to cleanup status record for token #{status.token}: #{e.message}"
+    end
+  end
+
+  # Redisキューをクリアする処理
+  def clear_redis_queue_for_token(token, reason)
+    return unless token.present?
+
+    begin
+      success = QueueRouter.clear_all_jobs_for_token(token, reason: reason)
+      
+      if success
+        Rails.logger.info "Successfully cleared Redis queue for token: #{token} (reason: #{reason})"
+      else
+        Rails.logger.warn "Failed to clear Redis queue for token: #{token} (reason: #{reason})"
+      end
+      
+      success
+    rescue => e
+      Rails.logger.error "Error clearing Redis queue for token #{token}: #{e.class}: #{e.message}"
+      false
     end
   end
 end 

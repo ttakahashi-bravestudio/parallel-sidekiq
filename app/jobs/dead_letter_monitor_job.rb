@@ -34,6 +34,9 @@ class DeadLetterMonitorJob < ApplicationJob
       
       Rails.logger.warn "Found dead FinalizeReportJob for token: #{token}, report_id: #{report_id}"
       
+      # Redisキューをクリア
+      clear_redis_queue_for_token(token, "FinalizeReportJob dead letter")
+      
       # ECSタスクを停止
       if ENV["ECS_CLUSTER"].present?
         stop_ecs_task_for_token(token)
@@ -55,6 +58,9 @@ class DeadLetterMonitorJob < ApplicationJob
       # 一定数のデッドジョブが蓄積された場合のみECSタスクを停止
       dead_count = count_dead_jobs_for_token(token)
       if dead_count >= 5 # 5個以上のデッドジョブがある場合
+        # Redisキューをクリア
+        clear_redis_queue_for_token(token, "ProcessCsvRowJob dead letter (#{dead_count} jobs)")
+        
         if ENV["ECS_CLUSTER"].present?
           stop_ecs_task_for_token(token)
         end
@@ -89,5 +95,25 @@ class DeadLetterMonitorJob < ApplicationJob
   def count_dead_jobs_for_token(token)
     dead_set = Sidekiq::DeadSet.new
     dead_set.to_a.count { |job| job['args']&.include?(token) }
+  end
+
+  # Redisキューをクリアする処理
+  def clear_redis_queue_for_token(token, reason)
+    return unless token.present?
+
+    begin
+      success = QueueRouter.clear_all_jobs_for_token(token, reason: reason)
+      
+      if success
+        Rails.logger.info "Successfully cleared Redis queue for token: #{token} (reason: #{reason})"
+      else
+        Rails.logger.warn "Failed to clear Redis queue for token: #{token} (reason: #{reason})"
+      end
+      
+      success
+    rescue => e
+      Rails.logger.error "Error clearing Redis queue for token #{token}: #{e.class}: #{e.message}"
+      false
+    end
   end
 end 
