@@ -28,6 +28,8 @@ class Report::FinalizeReportJob
         return
       end
   
+      upload_success = false
+      
       CsvProcessingStatus.transaction do
         s = CsvProcessingStatus.lock.find_by!(token: token)
         break if s.finalized_at.present?
@@ -37,8 +39,6 @@ class Report::FinalizeReportJob
         Zip::File.open(zip_path, Zip::File::CREATE) do |zipfile|
           Dir[File.join(path, '*')].each { |f| zipfile.add(File.basename(f), f) }
         end
-
-        upload_success = false
         
         if ENV["LOCAL_SAVE"].blank? && ENV["REPORT_S3_BUCKET_NAME"].present?
           # S3にアップロード
