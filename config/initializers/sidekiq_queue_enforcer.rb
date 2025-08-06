@@ -48,10 +48,7 @@
 # =============================================================================
 
 require "digest/sha1"
-
-module QueueRouter
-  def self.for_token(token) = "report-#{Digest::SHA1.hexdigest(token)[0,16]}"
-end
+require_relative "../../app/lib/queue_router"
 
 TARGETS = {
   "ProcessCsvRowJob"  => 4, # args: row, type, report_id, path, token
