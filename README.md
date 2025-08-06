@@ -121,10 +121,13 @@ rails monitor:check_ecs_tasks
 
 ```bash
 # Cronジョブの実行ログを確認（標準出力に表示）
-docker logs <container_name> | grep ecs-monitor
+docker-compose logs -f sidekiq | grep ecs-monitor
+
+# または個別のコンテナで
+docker logs <sidekiq-container-name> | grep ecs-monitor
 
 # Cronジョブの状態確認
-docker exec <container_name> crontab -l
+docker-compose exec sidekiq crontab -l
 ```
 
 ### リトライ設定
@@ -164,13 +167,36 @@ bundle exec brakeman
 
 ### Docker使用
 
+#### 開発環境（docker-compose）
+
 ```bash
-# 開発環境
+# 全サービスを起動（Rails + Sidekiq + DB + Redis）
 docker-compose up
 
-# 本番環境
-docker build -t pallarel-sidekiq .
-docker run -p 3000:3000 pallarel-sidekiq
+# バックグラウンドで起動
+docker-compose up -d
+
+# 特定のサービスのみ起動
+docker-compose up web        # Railsアプリのみ
+docker-compose up sidekiq    # Sidekiqのみ
+
+# ログ確認
+docker-compose logs -f web
+docker-compose logs -f sidekiq
+```
+
+#### 本番環境
+
+```bash
+# Railsアプリ用イメージをビルド
+docker build -t pallarel-sidekiq-web .
+
+# Sidekiq用イメージをビルド
+docker build -f Dockerfile.sidekiq -t pallarel-sidekiq-worker .
+
+# 個別に実行
+docker run -p 3000:3000 pallarel-sidekiq-web
+docker run pallarel-sidekiq-worker
 ```
 
 ### AWS ECS使用

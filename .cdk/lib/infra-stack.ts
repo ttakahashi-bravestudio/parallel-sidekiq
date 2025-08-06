@@ -681,7 +681,7 @@ export class InfraStack extends cdk.Stack {
             commands: [
               'echo Build started on `date`',
               'echo Building the Docker image for CronService...',
-              'docker build -f Dockerfile -t $ECR_REPOSITORY_URI:$CODEBUILD_RESOLVED_SOURCE_VERSION .',
+              'docker build -f Dockerfile.sidekiq -t $ECR_REPOSITORY_URI:$CODEBUILD_RESOLVED_SOURCE_VERSION .',
               'docker tag $ECR_REPOSITORY_URI:$CODEBUILD_RESOLVED_SOURCE_VERSION $ECR_REPOSITORY_URI:latest',
             ],
           },
